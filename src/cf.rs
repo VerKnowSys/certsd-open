@@ -115,7 +115,7 @@ pub async fn create_txt_record(
     let create_dns_txt_record = CreateDnsRecord {
         zone_identifier: zone_id,
         params: CreateDnsRecordParams {
-            name: &format!("_acme-challenge.{domain}"),
+            name: &format!("_acme-challenge.{domain}."),
             priority: None,
             proxied: Some(false),
             ttl: Some(60),
