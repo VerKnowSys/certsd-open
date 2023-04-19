@@ -1,19 +1,22 @@
-use std::env;
+use cloudflare::{
+    endpoints::dns::{
+        CreateDnsRecord, CreateDnsRecordParams, DeleteDnsRecord, DeleteDnsRecordResponse,
+        DnsContent, DnsRecord, ListDnsRecords, ListDnsRecordsParams,
+    },
+    framework::{
+        async_api::Client, auth::Credentials, response::ApiSuccess, Environment,
+        HttpApiClientConfig,
+    },
+};
 
-use cloudflare::endpoints::dns::CreateDnsRecord;
-use cloudflare::endpoints::dns::CreateDnsRecordParams;
-use cloudflare::endpoints::dns::DnsContent;
-use cloudflare::endpoints::dns::ListDnsRecordsParams;
-use cloudflare::framework::async_api::Client;
-use cloudflare::framework::{auth::Credentials, Environment, HttpApiClientConfig};
 
-
-fn get_env_value_or_panic(env: &str) -> String {
-    env::vars()
+pub fn get_env_value_or_panic(env: &str) -> String {
+    std::env::vars()
         .find(|(key, _)| key == env)
         .map(|(_, value)| value)
-        .unwrap()
+        .expect("Required env value: {env} is empty.")
 }
+
 
 #[test]
 fn test_get_env_value() {
@@ -25,25 +28,20 @@ fn test_get_env_value() {
 }
 
 
-#[tokio::test]
-async fn test_cf_api_dns_records_list() {
-    // let domain = "centratests.com";
+pub async fn list_acme_txt_records() -> Result<Vec<String>, anyhow::Error> {
     let zone_id = &get_env_value_or_panic("CLOUDFLARE_ZONE_ID");
-
     let client = Client::new(
         Credentials::UserAuthToken {
             token: get_env_value_or_panic("CLOUDFLARE_API_TOKEN"),
         },
         HttpApiClientConfig::default(),
         Environment::Production,
-    )
-    .unwrap_or_else(|_| panic!("Couldn't login to CF API"));
-
-    let list_dns_txt_records = cloudflare::endpoints::dns::ListDnsRecords {
+    )?;
+    let list_dns_txt_records = ListDnsRecords {
         zone_identifier: zone_id,
         params: ListDnsRecordsParams::default(),
     };
-    let response = client.request_handle(&list_dns_txt_records).await.unwrap();
+    let response = client.request_handle(&list_dns_txt_records).await?;
 
     let txt_record_ids = response
         .result
@@ -67,38 +65,45 @@ async fn test_cf_api_dns_records_list() {
             }
         })
         .collect::<Vec<String>>();
-
-    // let response = list_dns_records.query().unwrap();
-    println!("Res: {:#?}", txt_record_ids);
+    // no need to handle errors here, as the empty list of records is still a valid response
+    Ok(txt_record_ids)
 }
 
 
 #[tokio::test]
-async fn test_cf_api_delete() {
-    let zone_id = &get_env_value_or_panic("CLOUDFLARE_ZONE_ID");
+async fn test_list_acme_txt_records() {
+    let response = list_acme_txt_records().await;
+    println!("acme txt records: {response:#?}");
+    assert!(response.is_ok());
+}
 
+
+pub async fn delete_txt_record(
+    id: &str,
+) -> Result<ApiSuccess<DeleteDnsRecordResponse>, anyhow::Error> {
+    let zone_id = &get_env_value_or_panic("CLOUDFLARE_ZONE_ID");
     let client = Client::new(
         Credentials::UserAuthToken {
             token: get_env_value_or_panic("CLOUDFLARE_API_TOKEN"),
         },
         HttpApiClientConfig::default(),
         Environment::Production,
-    )
-    .unwrap_or_else(|_| panic!("Couldn't login to CF API"));
-
-    let delete_dns_record = cloudflare::endpoints::dns::DeleteDnsRecord {
+    )?;
+    let delete_dns_record = DeleteDnsRecord {
         zone_identifier: zone_id,
-        identifier: "4ade8000201553984456ade29e54d62f",
+        identifier: id,
     };
-    let response = client.request_handle(&delete_dns_record).await.unwrap();
-
-    println!("Res: {:#?}", response);
+    client
+        .request_handle(&delete_dns_record)
+        .await
+        .map_err(|e| e.into())
 }
 
 
-#[tokio::test]
-async fn test_cf_api_create_txt_record() {
-    let domain = "centratests.com";
+pub async fn create_txt_record(
+    domain: &str,
+    content: &str,
+) -> Result<ApiSuccess<DnsRecord>, anyhow::Error> {
     let zone_id = &get_env_value_or_panic("CLOUDFLARE_ZONE_ID");
     let client = Client::new(
         Credentials::UserAuthToken {
@@ -106,9 +111,7 @@ async fn test_cf_api_create_txt_record() {
         },
         HttpApiClientConfig::default(),
         Environment::Production,
-    )
-    .unwrap_or_else(|_| panic!("Couldn't login to CF API"));
-
+    )?;
     let create_dns_txt_record = CreateDnsRecord {
         zone_identifier: zone_id,
         params: CreateDnsRecordParams {
@@ -117,11 +120,49 @@ async fn test_cf_api_create_txt_record() {
             proxied: Some(false),
             ttl: Some(60),
             content: DnsContent::TXT {
-                content: "123456-challenge".to_string(),
+                content: content.to_string(),
             },
         },
     };
-    let response = client.request_handle(&create_dns_txt_record).await.unwrap();
 
-    println!("Res: {:#?}", response);
+    client
+        .request_handle(&create_dns_txt_record)
+        .await
+        .map_err(|e| e.into())
+}
+
+
+#[tokio::test]
+async fn test_create_txt_record() {
+    let domain = "centratests.com";
+    let response = create_txt_record(domain, "jakietakie").await;
+    assert!(response.is_ok());
+}
+
+
+#[tokio::test]
+async fn test_create_list_and_destroy_all_acme_txt_records() {
+    // create a record:
+    let domain = "centratests.com";
+    let response = create_txt_record(domain, "jakietakie123-oasdofs").await;
+    assert!(response.is_ok());
+
+    // list all TXT records
+    let response = list_acme_txt_records().await;
+    println!("acme txt records: {response:#?}");
+    assert!(response.is_ok());
+    let the_list = response.unwrap();
+    assert!(!the_list.is_empty());
+
+    // delete all acme TXT records
+    for entry in the_list {
+        let response = delete_txt_record(&entry).await;
+        assert!(response.is_ok())
+    }
+
+    // confirm that no more acme TXT records are defined:
+    let response = list_acme_txt_records().await;
+    assert!(response.is_ok());
+    let the_list = response.unwrap();
+    assert!(the_list.is_empty());
 }
