@@ -147,6 +147,9 @@ async fn test_create_list_and_destroy_all_acme_txt_records() {
     let response = create_txt_record(domain, "jakietakie123-oasdofs").await;
     assert!(response.is_ok());
 
+    let double_entry_response = create_txt_record(domain, "jakietakie123-oasdofs").await;
+    assert!(double_entry_response.is_err());
+
     // list all TXT records
     let response = list_acme_txt_records().await;
     println!("acme txt records: {response:#?}");
