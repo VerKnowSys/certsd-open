@@ -1,6 +1,6 @@
 use crate::*;
 
-use hyperacme::{create_p384_key, Directory, DirectoryUrl, Error};
+use hyperacme::{api::ApiProblem, create_p384_key, Directory, DirectoryUrl, Error};
 use openssl::{
     ec::EcKey,
     pkey::{PKey, Private},
@@ -114,6 +114,15 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
             .status
             .unwrap_or("unknown".to_string());
         info!("Status {status:?}");
+
+        if status == "invalid" {
+            let api_problem = ApiProblem{
+                detail: Some("Invalid status means that something went wrong with the LE API. Will try again later.".to_string()),
+                subproblems: None,
+                _type: String::from("ApiProblem")
+            };
+            return Err(Error::ApiProblem(api_problem));
+        }
 
         // Update the state against the ACME API.
         ord_new.refresh().await?;

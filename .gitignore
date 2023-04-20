@@ -1,5 +1,5 @@
 /target
 **/*.key
-**/*.cer
+**/*.pem
 *.sublime-workspace
 .env
