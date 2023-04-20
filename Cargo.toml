@@ -14,3 +14,4 @@ tokio = { version = "1.27.0", features = ["macros", "tokio-macros", "fs"] }
 cloudflare = "0.10.1"
 hyperacme = "0.0.3"
 openssl = "0.10.50"
+async-recursion = "1.0.4"

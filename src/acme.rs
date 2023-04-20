@@ -1,11 +1,16 @@
 use crate::*;
+use async_recursion::async_recursion;
+use hyperacme::order::CsrOrder;
 
-use hyperacme::{api::ApiProblem, create_p384_key, Directory, DirectoryUrl, Error};
+use hyperacme::{
+    api::ApiProblem, create_p384_key, order::NewOrder, Directory, DirectoryUrl, Error,
+};
 use openssl::{
     ec::EcKey,
     pkey::{PKey, Private},
 };
 use std::{path::Path, time::Duration};
+use tokio::time::sleep;
 use tokio::{fs::File, io::AsyncWriteExt};
 
 
@@ -18,6 +23,76 @@ pub async fn get_cert(domain: &str) -> Result<(), Error> {
 #[instrument]
 pub async fn get_cert_wildcard(domain: &str) -> Result<(), Error> {
     request_certificate(domain, true).await
+}
+
+
+#[instrument(skip(ord_new))]
+#[async_recursion]
+async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Error> {
+    // are we done?
+    if let Some(ord_csr) = ord_new.confirm_validations().await {
+        info!("Order confirmed.");
+        return Ok(ord_csr);
+    }
+
+    // Get the possible authorizations
+    let auths = ord_new.authorizations().await?;
+    let auth = &auths[0]; // only a single wildcard per domain
+    if auth.need_challenge().await {
+        info!("Pending {}", auth.domain_name().await);
+        match auth.dns_challenge().await {
+            Some(challenge) => {
+                let proof_code = challenge.dns_proof().await?;
+                // info!("Proof code: {proof_code}");
+                match create_txt_record(domain, &proof_code).await {
+                    Ok(_) => info!("DNS TXT record created"),
+                    Err(_e) => {} //info!("DNS record already defined!")
+                }
+
+                // The order at ACME will change status to either
+                // confirm ownership of the domain, or fail due to the
+                // not finding the proof. To see the change, we poll
+                // the API with pause between.
+                match challenge.validate(Duration::from_millis(5000)).await {
+                    Ok(_) => {
+                        info!("Challenge validated.")
+                    }
+                    Err(_e) => {
+                        // info!("Failed validation. Error {e:#?}")
+                    }
+                }
+            }
+            None => {
+                error!("DNS challenge is none.")
+            }
+        }
+    }
+    // ord_new.refresh().await?;
+    let status = &auth
+        .api_auth()
+        .await
+        .to_owned()
+        .status
+        .unwrap_or("unknown".to_string());
+    info!("Status {status:?}");
+
+    if status == "invalid" {
+        let api_problem = ApiProblem{
+            detail: Some("Invalid status means that something went wrong with the LE API. Will try again later.".to_string()),
+            subproblems: None,
+            _type: String::from("ApiProblem")
+        };
+        return Err(Error::ApiProblem(api_problem));
+    }
+
+    // Update the state against the ACME API.
+    ord_new.refresh().await?;
+
+    // Wait a second before calling the function again:
+    sleep(Duration::from_millis(1000)).await;
+
+    // Call recursively until we get what we want
+    await_csr(ord_new, domain).await
 }
 
 
@@ -54,7 +129,7 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     };
 
     // Order a new TLS certificate for a domain.
-    let mut ord_new = if wildcard {
+    let ord_new = if wildcard {
         account.new_order(&format!("*.{domain}"), &[]).await?
     } else {
         account.new_order(domain, &[]).await?
@@ -63,66 +138,7 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     // If the ownership of the domain(s) have already been
     // authorized in a previous order, you might be able to
     // skip validation. The ACME API provider decides.
-    let ord_csr = loop {
-        // are we done?
-        if let Some(ord_csr) = ord_new.confirm_validations().await {
-            info!("Order confirmed.");
-            break ord_csr;
-        }
-
-        // Get the possible authorizations
-        let auths = ord_new.authorizations().await?;
-        let auth = &auths[0]; // only a single wildcard per domain
-        if auth.need_challenge().await {
-            info!("Pending {}", auth.domain_name().await);
-            match auth.dns_challenge().await {
-                Some(challenge) => {
-                    let proof_code = challenge.dns_proof().await?;
-                    // info!("Proof code: {proof_code}");
-                    match create_txt_record(domain, &proof_code).await {
-                        Ok(_) => info!("DNS TXT record created"),
-                        Err(_e) => {} //info!("DNS record already defined!")
-                    }
-
-                    // The order at ACME will change status to either
-                    // confirm ownership of the domain, or fail due to the
-                    // not finding the proof. To see the change, we poll
-                    // the API with pause between.
-                    match challenge.validate(Duration::from_millis(5000)).await {
-                        Ok(_) => {
-                            info!("Challenge validated.")
-                        }
-                        Err(_e) => {
-                            // info!("Failed validation. Error {e:#?}")
-                        }
-                    }
-                }
-                None => {
-                    error!("DNS challenge is none.")
-                }
-            }
-        }
-        // ord_new.refresh().await?;
-        let status = &auth
-            .api_auth()
-            .await
-            .to_owned()
-            .status
-            .unwrap_or("unknown".to_string());
-        info!("Status {status:?}");
-
-        if status == "invalid" {
-            let api_problem = ApiProblem{
-                detail: Some("Invalid status means that something went wrong with the LE API. Will try again later.".to_string()),
-                subproblems: None,
-                _type: String::from("ApiProblem")
-            };
-            return Err(Error::ApiProblem(api_problem));
-        }
-
-        // Update the state against the ACME API.
-        ord_new.refresh().await?;
-    };
+    let ord_csr = await_csr(ord_new, domain).await?;
 
     let dns_response = list_acme_txt_records(domain).await;
     match dns_response {
