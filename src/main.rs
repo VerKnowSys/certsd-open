@@ -57,10 +57,15 @@ fn initialize_logger() -> TracingEnvFilterHandle {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     initialize_logger();
+
     let domain = "centratests.com";
 
     // Use DirectoryUrl::LetsEncrypStaging for dev/testing.
-    let url = DirectoryUrl::LetsEncryptStaging;
+    let url = match get_env_value_or_panic("LE_STAGING").as_ref() {
+        "YES" | "yes" | "1" | "true" => DirectoryUrl::LetsEncryptStaging,
+        _ => DirectoryUrl::LetsEncrypt,
+    };
+    info!("Using LE url: {url:?}");
 
     // Create a directory entrypoint.
     let dir = Directory::from_url(url).await?;
@@ -87,8 +92,8 @@ async fn main() -> Result<(), Error> {
 
     // Order a new TLS certificate for a domain.
     let mut ord_new = account
-        .new_order(&format!("*.{domain}"), &[]) // &format!("*.{domain}")
-        // .new_order(domain, &[&format!("*.{domain}"), domain])
+        .new_order(&format!("*.{domain}"), &[])
+        // .new_order(domain, &[])
         .await?;
 
     // If the ownership of the domain(s) have already been
