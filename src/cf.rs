@@ -14,7 +14,7 @@ pub fn get_env_value_or_panic(env: &str) -> String {
     std::env::vars()
         .find(|(key, _)| key == env)
         .map(|(_, value)| value)
-        .expect("Required env value: {env} is empty.")
+        .unwrap_or_else(|| panic!("Required env value: '{env}' is empty."))
 }
 
 
