@@ -109,7 +109,8 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     let dir = Directory::from_url(url).await?;
 
     // Your contact addresses, note the `mailto:`
-    let contact = vec!["mailto:devteam@centra.com".to_string()];
+    let le_contact = get_env_value_or_panic("LE_CONTACT");
+    let contact = vec![format!("mailto:{le_contact}")];
 
     // Generate a account.key if doesn't exist and register an account with your ACME provider:
     let account_key_file_name = "account.key";
