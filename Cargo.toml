@@ -1,0 +1,32 @@
+[package]
+name = "certsd"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tracing = { version = "0.1.36", features = ["log", "attributes", "std"] }
+tracing-subscriber = { version = "0.3.15", features = ["registry", "fmt", "env-filter"] }
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "1.0.70"
+tokio = { version = "1.27.0", features = ["macros", "tokio-macros"] }
+cloudflare = "0.10.1"
+
+yacme = "2.0.5"
+pkcs8 = "0.10.2"
+hyperacme = "0.0.3"
+openssl = "0.10.50"
+
+# rocket = { version = "=0.5.0-rc.3", features = ["json"] }
+# lers = { version = "0.4.0", features = ["dns-01", "dns-01-cloudflare", "vendored"] }
+# acmev02 = "0.1.0"
+# base64_light = "0.1.5"
+# acme-micro = "0.12.0"
+# hyperacme = "0.0.3"
+# acme-rs = "0.2.0"
+# serde_json = "1.0.96"
+# migamake-api-cloudflare = "0.2.0"
+# reqwest = "0.11.16"
+# cflare = "0.2.0"
+
