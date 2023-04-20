@@ -1,10 +1,16 @@
 use certsd::*;
 
-use hyperacme::create_p384_key;
-use hyperacme::{Directory, DirectoryUrl, Error}; // Certificate,
-use std::path::Path;
-use std::time::Duration;
-use std::{fs, io::Write};
+use hyperacme::{create_p384_key, Directory, DirectoryUrl, Error};
+use openssl::{
+    ec::EcKey,
+    pkey::{PKey, Private},
+};
+use std::{
+    fs::{self, File},
+    io::Write,
+    path::Path,
+    time::Duration,
+};
 
 
 // const DOMAINS: &[&str] = &["centra.fi"];

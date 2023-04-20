@@ -28,7 +28,7 @@ fn test_get_env_value() {
 }
 
 
-pub async fn list_acme_txt_records() -> Result<Vec<String>, anyhow::Error> {
+pub async fn list_acme_txt_records(domain: &str) -> Result<Vec<String>, anyhow::Error> {
     let zone_id = &get_env_value_or_panic("CLOUDFLARE_ZONE_ID");
     let client = Client::new(
         Credentials::UserAuthToken {
@@ -52,7 +52,8 @@ pub async fn list_acme_txt_records() -> Result<Vec<String>, anyhow::Error> {
                     content: _, /* the TXT entry is irrelevant to us, we only want to list TXT records… */
                 } => {
                     // …that contain "_acme-challenge", since we also use other TXT records for MX-stuff
-                    if record.name.contains("_acme-challenge") {
+                    if record.name.contains("_acme-challenge") && record.name.contains(domain)
+                    {
                         Some(record.id.to_owned())
                     } else {
                         None
@@ -72,7 +73,8 @@ pub async fn list_acme_txt_records() -> Result<Vec<String>, anyhow::Error> {
 
 #[tokio::test]
 async fn test_list_acme_txt_records() {
-    let response = list_acme_txt_records().await;
+    let domain = "centratests.com";
+    let response = list_acme_txt_records(domain).await;
     println!("acme txt records: {response:#?}");
     assert!(response.is_ok());
 }
@@ -151,7 +153,7 @@ async fn test_create_list_and_destroy_all_acme_txt_records() {
     assert!(double_entry_response.is_err());
 
     // list all TXT records
-    let response = list_acme_txt_records().await;
+    let response = list_acme_txt_records(domain).await;
     println!("acme txt records: {response:#?}");
     assert!(response.is_ok());
     let the_list = response.unwrap();
@@ -164,7 +166,7 @@ async fn test_create_list_and_destroy_all_acme_txt_records() {
     }
 
     // confirm that no more acme TXT records are defined:
-    let response = list_acme_txt_records().await;
+    let response = list_acme_txt_records(domain).await;
     assert!(response.is_ok());
     let the_list = response.unwrap();
     assert!(the_list.is_empty());
