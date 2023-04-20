@@ -5,12 +5,8 @@ use openssl::{
     ec::EcKey,
     pkey::{PKey, Private},
 };
-use std::{
-    fs::{self, File},
-    io::Write,
-    path::Path,
-    time::Duration,
-};
+use std::{path::Path, time::Duration};
+use tokio::{fs::File, io::AsyncWriteExt};
 
 
 #[instrument]
@@ -44,15 +40,15 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     let account_key_file_name = "account.key";
     let account = if Path::new(account_key_file_name).exists() {
         info!("Account key is present.");
-        let account_str = fs::read_to_string(account_key_file_name)?;
+        let account_str = tokio::fs::read_to_string(account_key_file_name).await?;
         dir.load_account(&account_str, contact.to_owned()).await?
     } else {
         info!("No account key present. Registering new account.");
         let new_account = dir.register_account(contact.to_owned()).await?;
 
-        let mut account_file = File::create(account_key_file_name)?;
+        let mut account_file = File::create(account_key_file_name).await?;
         let pkey = new_account.acme_private_key_pem().await?;
-        account_file.write_all(pkey.as_bytes())?;
+        account_file.write_all(pkey.as_bytes()).await?;
 
         new_account
     };
@@ -146,7 +142,7 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     } else {
         domain.to_string()
     };
-    fs::create_dir_all(&domain_dir)?;
+    tokio::fs::create_dir_all(&domain_dir).await?;
 
     // Ownership is proven. Read a private key or create new for the certificate:
     let domain_key_filename = format!("{domain_dir}/domain.key");
@@ -154,12 +150,14 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
         info!("Generating a new {domain_dir}/domain.key");
         let new_pkey = create_p384_key()?;
 
-        let mut domain_key_file = File::create(format!("{domain_dir}/domain.key"))?;
-        domain_key_file.write_all(&new_pkey.private_key_to_pem_pkcs8()?)?;
+        let mut domain_key_file = File::create(format!("{domain_dir}/domain.key")).await?;
+        domain_key_file
+            .write_all(&new_pkey.private_key_to_pem_pkcs8()?)
+            .await?;
         new_pkey
     } else {
         info!("Using previously known {domain_dir}/domain.key");
-        let pkey_str = fs::read_to_string(domain_key_filename)?;
+        let pkey_str = tokio::fs::read_to_string(domain_key_filename).await?;
         let ec_key: EcKey<Private> = EcKey::private_key_from_pem(pkey_str.as_bytes())?;
         PKey::from_ec_key(ec_key)?
     };
@@ -174,8 +172,8 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
 
     // Now download the certificate. Also stores the cert persistently.
     let cert = ord_cert.download_cert().await?;
-    let mut cert_file = File::create(format!("{domain_dir}/chained.pem"))?;
-    cert_file.write_all(cert.certificate().as_bytes())?;
+    let mut cert_file = File::create(format!("{domain_dir}/chained.pem")).await?;
+    cert_file.write_all(cert.certificate().as_bytes()).await?;
 
     info!("Done");
     Ok(())
