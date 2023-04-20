@@ -165,7 +165,7 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
 
     // Now download the certificate. Also stores the cert persistently.
     let cert = ord_cert.download_cert().await?;
-    let mut cert_file = File::create(format!("{domain_dir}/fullchain.cer"))?;
+    let mut cert_file = File::create(format!("{domain_dir}/chained.pem"))?;
     cert_file.write_all(cert.certificate().as_bytes())?;
 
     info!("Done");
