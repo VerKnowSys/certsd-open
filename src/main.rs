@@ -39,14 +39,13 @@ fn initialize_logger() -> TracingEnvFilterHandle {
 
 
 #[instrument]
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Error> {
     initialize_logger();
 
     let domain = "centratests.com";
-    get_cert_wildcard(domain)
-        .await
-        .and(get_cert(domain).await)?;
+    get_cert_wildcard(domain).await?;
+    get_cert(domain).await?;
 
     Ok(())
 }
