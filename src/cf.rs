@@ -20,6 +20,8 @@ pub fn get_env_value_or_panic(env: &str) -> String {
 
 #[test]
 fn test_get_env_value() {
+    dotenv::dotenv().ok();
+
     let zone_id = &get_env_value_or_panic("CLOUDFLARE_ZONE_ID");
     assert!(zone_id.len() > 10);
 
@@ -73,6 +75,8 @@ pub async fn list_acme_txt_records(domain: &str) -> Result<Vec<String>, anyhow::
 
 #[tokio::test]
 async fn test_list_acme_txt_records() {
+    dotenv::dotenv().ok();
+
     let domain = "centratests.com";
     let response = list_acme_txt_records(domain).await;
     println!("acme txt records: {response:#?}");
@@ -136,6 +140,8 @@ pub async fn create_txt_record(
 
 #[tokio::test]
 async fn test_create_txt_record() {
+    dotenv::dotenv().ok();
+
     let domain = "centratests.com";
     let response = create_txt_record(domain, "jakietakie").await;
     assert!(response.is_ok());
@@ -144,6 +150,8 @@ async fn test_create_txt_record() {
 
 #[tokio::test]
 async fn test_create_list_and_destroy_all_acme_txt_records() {
+    dotenv::dotenv().ok();
+
     // create a record:
     let domain = "centratests.com";
     let response = create_txt_record(domain, "jakietakie123-oasdofs").await;
