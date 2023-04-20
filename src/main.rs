@@ -13,7 +13,6 @@ use std::{fs, io::Write};
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let domain = "centratests.com";
-    // let zone_id = &get_env_value_or_panic("CLOUDFLARE_ZONE_ID");
 
     // Use DirectoryUrl::LetsEncrypStaging for dev/testing.
     let url = DirectoryUrl::LetsEncryptStaging;
@@ -25,15 +24,16 @@ async fn main() -> Result<(), Error> {
     let contact = vec!["mailto:devteam@centra.com".to_string()];
 
     // Generate a account.key if doesn't exist and register an account with your ACME provider:
-    let account = if Path::new("account.key").exists() {
-        println!("Account key is present.");
-        let account_str = fs::read_to_string("account.key")?;
+    let account_key_file_name = "account.key";
+    let account = if Path::new(account_key_file_name).exists() {
+        info!("Account key is present.");
+        let account_str = fs::read_to_string(account_key_file_name)?;
         dir.load_account(&account_str, contact.to_owned()).await?
     } else {
-        println!("No account key present. Registering new account.");
+        info!("No account key present. Registering new account.");
         let new_account = dir.register_account(contact.to_owned()).await?;
 
-        let mut account_file = std::fs::File::create("account.key")?;
+        let mut account_file = File::create(account_key_file_name)?;
         let pkey = new_account.acme_private_key_pem().await?;
         account_file.write_all(pkey.as_bytes())?;
 
@@ -41,7 +41,10 @@ async fn main() -> Result<(), Error> {
     };
 
     // Order a new TLS certificate for a domain.
-    let mut ord_new = account.new_order(&format!("*.{domain}"), &[]).await?;
+    let mut ord_new = account
+        .new_order(&format!("*.{domain}"), &[]) // &format!("*.{domain}")
+        // .new_order(domain, &[&format!("*.{domain}"), domain])
+        .await?;
 
     // If the ownership of the domain(s) have already been
     // authorized in a previous order, you might be able to
@@ -49,38 +52,66 @@ async fn main() -> Result<(), Error> {
     let ord_csr = loop {
         // are we done?
         if let Some(ord_csr) = ord_new.confirm_validations().await {
+            info!("Order confirmed.");
             break ord_csr;
         }
 
-        // Get the possible authorizations (for a single domain
-        // this will only be one element).
+        // Get the possible authorizations
         let auths = ord_new.authorizations().await?;
+        let auth = &auths[0]; // only a single wildcard per domain
+        if auth.need_challenge().await {
+            info!("Pending {}", auth.domain_name().await);
+            match auth.dns_challenge().await {
+                Some(challenge) => {
+                    let proof_code = challenge.dns_proof().await?;
+                    // info!("Proof code: {proof_code}");
+                    match create_txt_record(domain, &proof_code).await {
+                        Ok(_) => info!("DNS TXT record created"),
+                        Err(_e) => {} //info!("DNS record already defined!")
+                    }
 
-        let auth = &auths[0];
-        let challenge = auth.dns_challenge().await.unwrap();
-        let proof_code = challenge.dns_proof().await?;
-        match create_txt_record(domain, &proof_code).await {
-            Ok(_) => println!("DNS TXT record created"),
-            Err(_e) => {} //println!("DNS record already defined!")
+                    // The order at ACME will change status to either
+                    // confirm ownership of the domain, or fail due to the
+                    // not finding the proof. To see the change, we poll
+                    // the API with pause between.
+                    match challenge.validate(Duration::from_millis(5000)).await {
+                        Ok(_) => {
+                            info!("Challenge validated.")
+                        }
+                        Err(_e) => {
+                            // info!("Failed validation. Error {e:#?}")
+                        }
+                    }
+                }
+                None => {
+                    error!("DNS challenge is none.")
+                }
+            }
         }
-
-        // The order at ACME will change status to either
-        // confirm ownership of the domain, or fail due to the
-        // not finding the proof. To see the change, we poll
-        // the API with 5000 milliseconds wait between.
-        match challenge.validate(Duration::from_millis(10000)).await {
-            Ok(_) => println!("Challenge validated!"),
-            Err(_e) => {}
-        }
+        // ord_new.refresh().await?;
+        let status = &auth
+            .api_auth()
+            .await
+            .to_owned()
+            .status
+            .unwrap_or("unknown".to_string());
+        info!("Status {status:?}");
 
         // Update the state against the ACME API.
         ord_new.refresh().await?;
     };
 
-    let dns_response = list_acme_txt_records().await;
-    let the_list = dns_response.unwrap();
-    for entry in the_list {
-        delete_txt_record(&entry).await.unwrap();
+    let dns_response = list_acme_txt_records(domain).await;
+    match dns_response {
+        Ok(the_list) => {
+            for entry in the_list {
+                match delete_txt_record(&entry).await {
+                    Ok(_) => info!("DNS TXT record destroyed"),
+                    Err(_) => debug!("No DNS record to destroy"),
+                }
+            }
+        }
+        Err(e) => error!("Err: {e}"),
     }
 
     fs::create_dir_all(domain)?;
@@ -114,6 +145,6 @@ async fn main() -> Result<(), Error> {
     let mut cert_file = File::create(format!("{domain}/fullchain.cer"))?;
     cert_file.write_all(cert.certificate().as_bytes())?;
 
-    println!("Done");
+    info!("Done");
     Ok(())
 }
