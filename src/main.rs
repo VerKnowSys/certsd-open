@@ -42,6 +42,7 @@ fn initialize_logger() -> TracingEnvFilterHandle {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Error> {
     initialize_logger();
+    dotenv::dotenv().ok();
 
     let domain = "centratests.com";
     get_cert_wildcard(domain).await?;
