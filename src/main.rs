@@ -83,10 +83,23 @@ async fn main() -> Result<(), Error> {
         delete_txt_record(&entry).await.unwrap();
     }
 
-    // Ownership is proven. Create a private key for
-    // the certificate. These are provided for convenience, you
-    // can provide your own keypair instead if you want.
-    let domain_key = create_p384_key()?;
+    fs::create_dir_all(domain)?;
+
+    // Ownership is proven. Read a private key or create new for the certificate:
+    let domain_key_filename = format!("{domain}/domain.key");
+    let domain_key = if !Path::new(&domain_key_filename).exists() {
+        info!("Generating a new {domain}/domain.key");
+        let new_pkey = create_p384_key()?;
+
+        let mut domain_key_file = File::create(format!("{domain}/domain.key"))?;
+        domain_key_file.write_all(&new_pkey.private_key_to_pem_pkcs8()?)?;
+        new_pkey
+    } else {
+        info!("Using previously known {domain}/domain.key");
+        let pkey_str = fs::read_to_string(domain_key_filename)?;
+        let ec_key: EcKey<Private> = EcKey::private_key_from_pem(pkey_str.as_bytes())?;
+        PKey::from_ec_key(ec_key)?
+    };
 
     // Submit the CSR. This causes the ACME provider to enter a
     // state of "processing" that must be polled until the
@@ -96,16 +109,9 @@ async fn main() -> Result<(), Error> {
         .finalize_pkey(domain_key.to_owned(), Duration::from_millis(5000))
         .await?;
 
-    // Now download the certificate. Also stores the cert in
-    // the persistence.
+    // Now download the certificate. Also stores the cert persistently.
     let cert = ord_cert.download_cert().await?;
-
-    fs::create_dir_all(domain)?;
-
-    let mut domain_key_file = std::fs::File::create(format!("{domain}/domain.key"))?;
-    domain_key_file.write_all(&domain_key.private_key_to_pem_pkcs8()?)?;
-
-    let mut cert_file = std::fs::File::create(format!("{domain}/fullchain.cer"))?;
+    let mut cert_file = File::create(format!("{domain}/fullchain.cer"))?;
     cert_file.write_all(cert.certificate().as_bytes())?;
 
     println!("Done");
