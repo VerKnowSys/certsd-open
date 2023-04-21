@@ -1,7 +1,9 @@
 use crate::*;
 use async_recursion::async_recursion;
 use hyperacme::order::CsrOrder;
+use hyperacme::Certificate;
 
+use chrono::{prelude::*, Months};
 use hyperacme::{
     api::ApiProblem, create_p384_key, order::NewOrder, Directory, DirectoryUrl, Error,
 };
@@ -94,7 +96,7 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
 }
 
 
-#[instrument]
+#[instrument(skip(domain))]
 async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> {
     // Use DirectoryUrl::LetsEncrypStaging for dev/testing.
     let url = match get_env_value_or_panic("LE_STAGING").as_ref() {
@@ -127,31 +129,6 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
         new_account
     };
 
-    // Order a new TLS certificate for a domain.
-    let ord_new = if wildcard {
-        account.new_order(&format!("*.{domain}"), &[]).await?
-    } else {
-        account.new_order(domain, &[]).await?
-    };
-
-    // If the ownership of the domain(s) have already been
-    // authorized in a previous order, you might be able to
-    // skip validation. The ACME API provider decides.
-    let ord_csr = await_csr(ord_new, domain).await?;
-
-    let dns_response = list_acme_txt_records(domain).await;
-    match dns_response {
-        Ok(the_list) => {
-            for entry in the_list {
-                match delete_txt_record(&entry).await {
-                    Ok(_) => info!("DNS TXT record destroyed"),
-                    Err(_) => debug!("No DNS record to destroy"),
-                }
-            }
-        }
-        Err(e) => error!("Err: {e}"),
-    }
-
     let domain_dir = if wildcard {
         format!("wild_{domain}")
     } else {
@@ -159,7 +136,7 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     };
     tokio::fs::create_dir_all(&domain_dir).await?;
 
-    // Ownership is proven. Read a private key or create new for the certificate:
+    // Read a domain private key or create new for the certificate:
     let domain_key_filename = format!("{domain_dir}/domain.key");
     let domain_key = if !Path::new(&domain_key_filename).exists() {
         info!("Generating a new {domain_dir}/domain.key");
@@ -177,6 +154,40 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
         PKey::from_ec_key(ec_key)?
     };
 
+    // check if the current Certificate is fresh enough
+    let chained_certifcate_file = format!("{domain_dir}/chained.pem");
+    if Path::new(&chained_certifcate_file).exists() {
+        info!("Previous certificate exists: {chained_certifcate_file}.");
+
+        let pkey_string = String::from_utf8(domain_key.private_key_to_pem_pkcs8()?)?;
+        let current_cert_read = Certificate::parse(
+            pkey_string,
+            tokio::fs::read_to_string(chained_certifcate_file.to_owned()).await?,
+        )?;
+        let expire_date = current_cert_read.expiry()?;
+        let today = Local::now();
+        let today_plus_2_months = today + Months::new(2);
+        if today_plus_2_months < expire_date {
+            info!("Certificate expires at: {expire_date}. No need to renew for now.");
+            return Ok(());
+        }
+    }
+
+    // Order a new TLS certificate for a domain.
+    let ord_new = if wildcard {
+        account.new_order(&format!("*.{domain}"), &[]).await?
+    } else {
+        account.new_order(domain, &[]).await?
+    };
+
+    // If the ownership of the domain(s) have already been
+    // authorized in a previous order, you might be able to
+    // skip validation. The ACME API provider decides.
+    let ord_csr = await_csr(ord_new, domain).await?;
+
+    // delete the DNS TXT _acme entries
+    delete_acme_dns_txt_entries(domain).await?;
+
     // Submit the CSR. This causes the ACME provider to enter a
     // state of "processing" that must be polled until the
     // certificate is either issued or rejected. Again we poll
@@ -187,7 +198,8 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
 
     // Now download the certificate. Also stores the cert persistently.
     let cert = ord_cert.download_cert().await?;
-    let mut cert_file = File::create(format!("{domain_dir}/chained.pem")).await?;
+
+    let mut cert_file = File::create(chained_certifcate_file).await?;
     cert_file.write_all(cert.certificate().as_bytes()).await?;
 
     info!("Done");
