@@ -205,6 +205,6 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     let mut cert_file = File::create(chained_certifcate_file).await?;
     cert_file.write_all(cert.certificate().as_bytes()).await?;
 
-    info!("Done");
+    info!("Ready");
     Ok(())
 }
