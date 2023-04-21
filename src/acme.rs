@@ -83,6 +83,9 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
     info!("Status {status:?}");
 
     if status == "invalid" {
+        // before aborting, destroy previous TXT records for domain
+        delete_acme_dns_txt_entries(domain).await?;
+
         let api_problem = ApiProblem{
             detail: Some("Invalid status means that something went wrong with the LE API. Will try again later.".to_string()),
             subproblems: None,
