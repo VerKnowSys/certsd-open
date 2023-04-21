@@ -45,8 +45,5 @@ async fn main() -> Result<(), Error> {
     dotenv::dotenv().ok();
 
     let domain = "centratests.com";
-    get_cert_wildcard(domain).await?;
-    get_cert(domain).await?;
-
-    Ok(())
+    get_cert_wildcard(domain).await //.and(get_cert(domain).await)
 }
