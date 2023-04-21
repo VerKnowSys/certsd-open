@@ -1,3 +1,5 @@
+use crate::*;
+
 use cloudflare::{
     endpoints::dns::{
         CreateDnsRecord, CreateDnsRecordParams, DeleteDnsRecord, DeleteDnsRecordResponse,
@@ -27,6 +29,23 @@ fn test_get_env_value() {
 
     let api_token = &get_env_value_or_panic("CLOUDFLARE_API_TOKEN");
     assert!(api_token.len() > 10);
+}
+
+
+pub async fn delete_acme_dns_txt_entries(domain: &str) -> Result<(), hyperacme::Error> {
+    let dns_response = list_acme_txt_records(domain).await;
+    match dns_response {
+        Ok(the_list) => {
+            for entry in the_list {
+                match delete_txt_record(&entry).await {
+                    Ok(_) => info!("DNS TXT record destroyed"),
+                    Err(_) => debug!("No DNS record to destroy"),
+                }
+            }
+        }
+        Err(e) => error!("Err: {e}"),
+    }
+    Ok(())
 }
 
 
