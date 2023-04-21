@@ -10,7 +10,6 @@ use openssl::{
     pkey::{PKey, Private},
 };
 use std::{path::Path, time::Duration};
-use tokio::time::sleep;
 use tokio::{fs::File, io::AsyncWriteExt};
 
 
@@ -66,8 +65,13 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
                 error!("DNS challenge is none.")
             }
         }
+    } else {
+        info!("Challenge not necessary.");
     }
-    // ord_new.refresh().await?;
+
+    // Update the state against the ACME API.
+    ord_new.refresh().await?;
+
     let status = &auth
         .api_auth()
         .await
@@ -84,12 +88,6 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
         };
         return Err(Error::ApiProblem(api_problem));
     }
-
-    // Update the state against the ACME API.
-    ord_new.refresh().await?;
-
-    // Wait a second before calling the function again:
-    sleep(Duration::from_millis(1000)).await;
 
     // Call recursively until we get what we want
     await_csr(ord_new, domain).await
