@@ -56,10 +56,10 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
                 // the API with pause between.
                 match challenge.validate(Duration::from_millis(5000)).await {
                     Ok(_) => {
-                        info!("Challenge validated.")
+                        info!("Challenge validated.");
                     }
-                    Err(_e) => {
-                        // info!("Failed validation. Error {e:#?}")
+                    Err(e) => {
+                        debug!("Failed validation. Error {e:#?}");
                     }
                 }
 
@@ -171,7 +171,7 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
         let today = Local::now();
         let today_plus_2_months = today + Months::new(2);
         if today_plus_2_months < expire_date {
-            info!("Certificate expires at: {expire_date}. No need to renew for now.");
+            info!("Certificate expires at: {expire_date}. No need to renew.");
             return Ok(());
         }
     }
@@ -208,7 +208,7 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     // send success notification using a Slack webhook
     let slack_webhook = get_env_value_or_panic("SLACK_WEBHOOK");
     let message = if wildcard {
-        format!("Certificate renewal succeeded for the wildcard domain: *.{domain}.")
+        format!("Certificate renewal succeeded for the domain: *.{domain}.")
     } else {
         format!("Certificate renewal succeeded for the domain: {domain}.")
     };
