@@ -54,7 +54,7 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
                 // confirm ownership of the domain, or fail due to the
                 // not finding the proof. To see the change, we poll
                 // the API with pause between.
-                match challenge.validate(Duration::from_millis(5000)).await {
+                match challenge.validate(Duration::from_millis(15000)).await {
                     Ok(_) => {
                         info!("Challenge validated.");
                     }
