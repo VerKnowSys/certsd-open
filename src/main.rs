@@ -39,7 +39,7 @@ fn initialize_logger() -> TracingEnvFilterHandle {
 
 
 #[instrument]
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main] // (flavor = "current_thread")
 async fn main() -> Result<(), Error> {
     initialize_logger();
     dotenv::dotenv().ok();
