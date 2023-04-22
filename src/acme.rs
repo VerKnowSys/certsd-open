@@ -1,7 +1,7 @@
 use crate::*;
 use async_recursion::async_recursion;
-use hyperacme::order::CsrOrder;
 use hyperacme::Certificate;
+use hyperacme::{order::CsrOrder, Account};
 
 use chrono::{prelude::*, Months};
 use hyperacme::{
@@ -100,6 +100,66 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
 }
 
 
+#[instrument(skip(dir))]
+async fn load_or_generate_new_account(
+    contact: &Vec<String>,
+    dir: &Directory,
+) -> Result<Account, Error> {
+    let account_key_file_name = "account.key";
+    if Path::new(account_key_file_name).exists() {
+        info!("Account key is present.");
+        let account_str = tokio::fs::read_to_string(account_key_file_name).await?;
+        dir.load_account(&account_str, contact.to_owned()).await
+    } else {
+        info!("No account key present. Registering new account.");
+        let new_account = dir.register_account(contact.to_owned()).await?;
+
+        let mut account_file = File::create(account_key_file_name).await?;
+        let pkey = new_account.acme_private_key_pem().await?;
+        account_file.write_all(pkey.as_bytes()).await?;
+
+        Ok(new_account)
+    }
+}
+
+
+#[instrument]
+async fn load_or_generate_domain_key(
+    domain_key_filename: &str,
+    domain_dir: &str,
+) -> Result<PKey<Private>, Error> {
+    if !Path::new(&domain_key_filename).exists() {
+        info!("Generating a new {domain_dir}/domain.key");
+        let new_pkey = create_p384_key()?;
+
+        let mut domain_key_file = File::create(format!("{domain_dir}/domain.key")).await?;
+        domain_key_file
+            .write_all(&new_pkey.private_key_to_pem_pkcs8()?)
+            .await?;
+        Ok(new_pkey)
+    } else {
+        info!("Using previously known {domain_dir}/domain.key");
+        let pkey_str = tokio::fs::read_to_string(domain_key_filename).await?;
+        let ec_key: EcKey<Private> = EcKey::private_key_from_pem(pkey_str.as_bytes())?;
+        Ok(PKey::from_ec_key(ec_key)?)
+    }
+}
+
+
+#[instrument]
+async fn read_certificate_expiry_date(
+    chained_certifcate_file_name: &str,
+    domain_key: &PKey<Private>,
+) -> Result<DateTime<Utc>, Error> {
+    let pkey_string = String::from_utf8(domain_key.private_key_to_pem_pkcs8()?)?;
+    let current_cert_read = Certificate::parse(
+        pkey_string,
+        tokio::fs::read_to_string(chained_certifcate_file_name).await?,
+    )?;
+    current_cert_read.expiry()
+}
+
+
 #[instrument(skip(domain))]
 async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> {
     // Use DirectoryUrl::LetsEncrypStaging for dev/testing.
@@ -117,21 +177,7 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     let contact = vec![format!("mailto:{le_contact}")];
 
     // Generate a account.key if doesn't exist and register an account with your ACME provider:
-    let account_key_file_name = "account.key";
-    let account = if Path::new(account_key_file_name).exists() {
-        info!("Account key is present.");
-        let account_str = tokio::fs::read_to_string(account_key_file_name).await?;
-        dir.load_account(&account_str, contact.to_owned()).await?
-    } else {
-        info!("No account key present. Registering new account.");
-        let new_account = dir.register_account(contact.to_owned()).await?;
-
-        let mut account_file = File::create(account_key_file_name).await?;
-        let pkey = new_account.acme_private_key_pem().await?;
-        account_file.write_all(pkey.as_bytes()).await?;
-
-        new_account
-    };
+    let account = load_or_generate_new_account(&contact, &dir).await?;
 
     let domain_dir = if wildcard {
         format!("wild_{domain}")
@@ -142,37 +188,18 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
 
     // Read a domain private key or create new for the certificate:
     let domain_key_filename = format!("{domain_dir}/domain.key");
-    let domain_key = if !Path::new(&domain_key_filename).exists() {
-        info!("Generating a new {domain_dir}/domain.key");
-        let new_pkey = create_p384_key()?;
-
-        let mut domain_key_file = File::create(format!("{domain_dir}/domain.key")).await?;
-        domain_key_file
-            .write_all(&new_pkey.private_key_to_pem_pkcs8()?)
-            .await?;
-        new_pkey
-    } else {
-        info!("Using previously known {domain_dir}/domain.key");
-        let pkey_str = tokio::fs::read_to_string(domain_key_filename).await?;
-        let ec_key: EcKey<Private> = EcKey::private_key_from_pem(pkey_str.as_bytes())?;
-        PKey::from_ec_key(ec_key)?
-    };
+    let domain_key = load_or_generate_domain_key(&domain_key_filename, &domain_dir).await?;
 
     // check if the current Certificate is fresh enough
     let chained_certifcate_file = format!("{domain_dir}/chained.pem");
     if Path::new(&chained_certifcate_file).exists() {
         info!("Previous certificate exists: {chained_certifcate_file}.");
-
-        let pkey_string = String::from_utf8(domain_key.private_key_to_pem_pkcs8()?)?;
-        let current_cert_read = Certificate::parse(
-            pkey_string,
-            tokio::fs::read_to_string(chained_certifcate_file.to_owned()).await?,
-        )?;
-        let expire_date = current_cert_read.expiry()?;
+        let expiry_date =
+            read_certificate_expiry_date(&chained_certifcate_file, &domain_key).await?;
         let today = Local::now();
         let today_plus_2_months = today + Months::new(2);
-        if today_plus_2_months < expire_date {
-            info!("Certificate expires at: {expire_date}. No need to renew.");
+        if today_plus_2_months < expiry_date {
+            info!("Certificate expires at: {expiry_date}. No need to renew.");
             return Ok(());
         }
     }
