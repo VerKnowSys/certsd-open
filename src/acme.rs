@@ -27,10 +27,9 @@ pub async fn get_cert_wildcard(domain: &str) -> Result<(), Error> {
 }
 
 
-#[instrument(skip(ord_new))]
+#[instrument(skip(ord_new, domain))]
 #[async_recursion]
 async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Error> {
-    // are we done?
     if let Some(ord_csr) = ord_new.confirm_validations().await {
         info!("Order confirmed.");
         return Ok(ord_csr);
@@ -51,6 +50,7 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
                     Ok(_) => info!("DNS TXT record created"),
                     Err(_e) => {} //info!("DNS record already defined!")
                 }
+                ord_new.refresh().await?;
 
                 // The order at ACME will change status to either
                 // confirm ownership of the domain, or fail due to the
@@ -64,6 +64,7 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
                         debug!("Failed validation. Error {e:#?}");
                     }
                 }
+                ord_new.refresh().await?;
 
                 // delete the DNS TXT _acme entries
                 delete_acme_dns_txt_entries(domain).await?;
@@ -74,10 +75,8 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
         }
     } else {
         info!("Challenge not required.");
+        ord_new.refresh().await?;
     }
-
-    // Update the state against the ACME API.
-    ord_new.refresh().await?;
 
     let status = &auth
         .api_auth()
