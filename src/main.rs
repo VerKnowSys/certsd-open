@@ -39,7 +39,7 @@ fn initialize_logger() -> TracingEnvFilterHandle {
 
 
 #[instrument]
-#[tokio::main] // (flavor = "current_thread")
+#[tokio::main(flavor = "current_thread")] //(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<(), Error> {
     initialize_logger();
     dotenv::dotenv().ok();
@@ -48,18 +48,12 @@ async fn main() -> Result<(), Error> {
         .split_ascii_whitespace()
         .map(ToOwned::to_owned)
         .collect::<Vec<_>>();
-    let wildcard = matches!(
-        get_env_value_or_panic("DOMAINS_WILDCARD").as_str(),
-        "YES" | "yes" | "on" | "ON" | "1"
-    );
 
-    info!("Processing domains: {domains:?} (wildcard: {wildcard})");
+    info!("Processing domains: {domains:?}");
     for domain in domains {
-        if wildcard {
-            get_cert_wildcard(&domain).await?
-        } else {
-            get_cert(&domain).await?
-        }
+        get_cert_wildcard(&domain)
+            .await
+            .and(get_cert(&domain).await)?;
     }
 
     Ok(())
