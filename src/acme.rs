@@ -2,6 +2,7 @@ use crate::*;
 use async_recursion::async_recursion;
 use hyperacme::Certificate;
 use hyperacme::{order::CsrOrder, Account};
+use std::os::unix::fs::PermissionsExt;
 
 use chrono::{prelude::*, Months};
 use hyperacme::{
@@ -117,9 +118,18 @@ async fn load_or_generate_new_account(
         let mut account_file = File::create(account_key_file_name).await?;
         let pkey = new_account.acme_private_key_pem().await?;
         account_file.write_all(pkey.as_bytes()).await?;
-
+        set_private_key_permissions(account_key_file_name).await?;
         Ok(new_account)
     }
+}
+
+
+#[instrument]
+async fn set_private_key_permissions(file_name: &str) -> Result<(), Error> {
+    let mut perms = tokio::fs::metadata(&file_name).await?.permissions();
+    perms.set_mode(0o600);
+    tokio::fs::set_permissions(&file_name, perms).await?;
+    Ok(())
 }
 
 
@@ -131,11 +141,12 @@ async fn load_or_generate_domain_key(
     if !Path::new(&domain_key_filename).exists() {
         info!("Generating a new {domain_dir}/domain.key");
         let new_pkey = create_p384_key()?;
-
-        let mut domain_key_file = File::create(format!("{domain_dir}/domain.key")).await?;
+        let domain_key_file_name = &format!("{domain_dir}/domain.key");
+        let mut domain_key_file = File::create(domain_key_file_name).await?;
         domain_key_file
             .write_all(&new_pkey.private_key_to_pem_pkcs8()?)
             .await?;
+        set_private_key_permissions(domain_key_file_name).await?;
         Ok(new_pkey)
     } else {
         info!("Using previously known {domain_dir}/domain.key");
