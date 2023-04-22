@@ -44,6 +44,23 @@ async fn main() -> Result<(), Error> {
     initialize_logger();
     dotenv::dotenv().ok();
 
-    let domain = "centratests.com";
-    get_cert_wildcard(domain).await //.and(get_cert(domain).await)
+    let domains = get_env_value_or_panic("DOMAINS")
+        .split_ascii_whitespace()
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+    let wildcard = matches!(
+        get_env_value_or_panic("DOMAINS_WILDCARD").as_str(),
+        "YES" | "yes" | "on" | "ON" | "1"
+    );
+
+    info!("Processing domains: {domains:?} (wildcard: {wildcard})");
+    for domain in domains {
+        if wildcard {
+            get_cert_wildcard(&domain).await?
+        } else {
+            get_cert(&domain).await?
+        }
+    }
+
+    Ok(())
 }
