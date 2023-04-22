@@ -43,8 +43,10 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
         info!("Pending {}", auth.domain_name().await);
         match auth.dns_challenge().await {
             Some(challenge) => {
+                debug!("Deleting any previous DNS entries for domain: {domain}");
+                delete_acme_dns_txt_entries(domain).await?;
+
                 let proof_code = challenge.dns_proof().await?;
-                // info!("Proof code: {proof_code}");
                 match create_txt_record(domain, &proof_code).await {
                     Ok(_) => info!("DNS TXT record created"),
                     Err(_e) => {} //info!("DNS record already defined!")
@@ -67,11 +69,11 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
                 delete_acme_dns_txt_entries(domain).await?;
             }
             None => {
-                error!("DNS challenge is none.")
+                error!("Challenge is None!")
             }
         }
     } else {
-        info!("Challenge not necessary.");
+        info!("Challenge not required.");
     }
 
     // Update the state against the ACME API.
@@ -187,9 +189,6 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     // authorized in a previous order, you might be able to
     // skip validation. The ACME API provider decides.
     let ord_csr = await_csr(ord_new, domain).await?;
-
-    // delete the DNS TXT _acme entries
-    delete_acme_dns_txt_entries(domain).await?;
 
     // Submit the CSR. This causes the ACME provider to enter a
     // state of "processing" that must be polled until the
