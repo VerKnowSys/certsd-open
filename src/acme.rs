@@ -12,7 +12,7 @@ use openssl::{
     pkey::{PKey, Private},
 };
 use std::{path::Path, time::Duration};
-use tokio::{fs::File, io::AsyncWriteExt};
+use tokio::{fs::File, io::AsyncWriteExt, task::spawn_blocking};
 
 
 #[instrument]
@@ -85,9 +85,8 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
     if status == "invalid" {
         // before aborting, destroy previous TXT records for domain
         delete_acme_dns_txt_entries(domain).await?;
-
         let api_problem = ApiProblem{
-            detail: Some("Invalid status means that something went wrong with the LE API. Will try again later.".to_string()),
+            detail: Some("Invalid status means that something went wrong with the LE API or DNS TXT record mismatch. Will try again later.".to_string()),
             subproblems: None,
             _type: String::from("ApiProblem")
         };
@@ -204,6 +203,19 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
 
     let mut cert_file = File::create(chained_certifcate_file).await?;
     cert_file.write_all(cert.certificate().as_bytes()).await?;
+
+    // send success notification using a Slack webhook
+    let slack_webhook = get_env_value_or_panic("SLACK_WEBHOOK");
+    let message = if wildcard {
+        format!("Certificate renewal succeeded for the wildcard domain: *.{domain}.")
+    } else {
+        format!("Certificate renewal succeeded for the domain: {domain}.")
+    };
+    spawn_blocking(move || {
+        notify_success(&slack_webhook, &message);
+    })
+    .await
+    .unwrap_or_default();
 
     info!("Ready");
     Ok(())
