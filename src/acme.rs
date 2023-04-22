@@ -62,6 +62,9 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
                         // info!("Failed validation. Error {e:#?}")
                     }
                 }
+
+                // delete the DNS TXT _acme entries
+                delete_acme_dns_txt_entries(domain).await?;
             }
             None => {
                 error!("DNS challenge is none.")
@@ -83,8 +86,6 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
     info!("Status {status:?}");
 
     if status == "invalid" {
-        // before aborting, destroy previous TXT records for domain
-        delete_acme_dns_txt_entries(domain).await?;
         let api_problem = ApiProblem{
             detail: Some("Invalid status means that something went wrong with the LE API or DNS TXT record mismatch. Will try again later.".to_string()),
             subproblems: None,
