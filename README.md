@@ -9,7 +9,7 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
 
 
 
-# Features:
+## Features:
 
 - Generates separate certificates for the root domain and its wildcard version.
 
@@ -25,7 +25,7 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
 
 
 
-# Requirements read from the configuration file:
+## Requirements read from the configuration file:
 
 - CloudFlare API Token (with "Edit zone DNS" permission).
 
@@ -35,7 +35,7 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
 
 
 
-# Step by step how it works
+## Step by step how it works
 
 - CertsD reads the input configuration from [one of the existing paths](https://github.com/VerKnowSys/certsd-open/blob/master/src/config.rs#L29-L32).
 
@@ -49,9 +49,23 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
 
 - A DNS TXT record for a given domain (with the value of the challenge) is created using CF API.
 
-- Await the ACME response. After the order is confirmed, the (`example.com/chained.pem` + `wild_example.com/chained.pem`) are created.
+- Await confirmation of the order from the ACME response.
+
+- A DNS TXT record for a given domain is deleted using CF API.
+
+- After order confirmation, the (`example.com/chained.pem` + `wild_example.com/chained.pem`) are fetched from ACME.
 
 
+
+## A few notes about ACME service:
+
+- CertsD stability relies on the stability of ACME services. Don't panic. Be patient.
+
+- From time to time the ACME API responds with a random "invalid" status just because. Don't panic. Be patient.
+
+- If you won't remove one of `account`.key` + `example.com/domain.key` + `wild_example.com/domain.key` too often, the ACME is likely to renew your certs faster without any issues (ACME cert caching mechanism).
+
+- If you want to use ACME Staging for testing, set the `acme_staging: true` in your configuration.
 
 
 ## Software requirements:
