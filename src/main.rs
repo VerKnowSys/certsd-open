@@ -42,18 +42,24 @@ fn initialize_logger() -> TracingEnvFilterHandle {
 #[tokio::main(flavor = "current_thread")] //(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<(), Error> {
     initialize_logger();
-    dotenv::dotenv().ok();
 
-    let domains = get_env_value_or_panic("DOMAINS")
-        .split_ascii_whitespace()
-        .map(ToOwned::to_owned)
-        .collect::<Vec<_>>();
+    // Config validation
+    let config = match Config::load().await {
+        Ok(config) => {
+            debug!("The configuration is: {config:#?}");
+            config
+        }
+        Err(e) => {
+            panic!("Unable to load the config: {e:#?}")
+        }
+    };
 
+    let domains = config.domains().await;
     info!("Processing domains: {domains:?}");
     for domain in domains {
-        get_cert_wildcard(&domain)
+        get_cert_wildcard(&config, &domain)
             .await
-            .and(get_cert(&domain).await)?;
+            .and(get_cert(&config, &domain).await)?;
     }
 
     Ok(())
