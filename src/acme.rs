@@ -17,20 +17,24 @@ use tokio::{fs::File, io::AsyncWriteExt, task::spawn_blocking};
 
 
 #[instrument]
-pub async fn get_cert(domain: &str) -> Result<(), Error> {
-    request_certificate(domain, false).await
+pub async fn get_cert(config: &Config, domain: &str) -> Result<(), Error> {
+    request_certificate(config, domain, false).await
 }
 
 
 #[instrument]
-pub async fn get_cert_wildcard(domain: &str) -> Result<(), Error> {
-    request_certificate(domain, true).await
+pub async fn get_cert_wildcard(config: &Config, domain: &str) -> Result<(), Error> {
+    request_certificate(config, domain, true).await
 }
 
 
 #[instrument(skip(ord_new, domain))]
 #[async_recursion]
-async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Error> {
+async fn await_csr(
+    config: &Config,
+    mut ord_new: NewOrder,
+    domain: &str,
+) -> Result<CsrOrder, Error> {
     if let Some(ord_csr) = ord_new.confirm_validations().await {
         info!("Order confirmed.");
         return Ok(ord_csr);
@@ -44,10 +48,10 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
         match auth.dns_challenge().await {
             Some(challenge) => {
                 debug!("Deleting any previous DNS entries for domain: {domain}");
-                delete_acme_dns_txt_entries(domain).await?;
+                delete_acme_dns_txt_entries(config, domain).await?;
 
                 let proof_code = challenge.dns_proof().await?;
-                match create_txt_record(domain, &proof_code).await {
+                match create_txt_record(config, domain, &proof_code).await {
                     Ok(_) => info!("DNS TXT record created"),
                     Err(_e) => {} //info!("DNS record already defined!")
                 }
@@ -68,7 +72,7 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
                 ord_new.refresh().await?;
 
                 // delete the DNS TXT _acme entries
-                delete_acme_dns_txt_entries(domain).await?;
+                delete_acme_dns_txt_entries(config, domain).await?;
             }
             None => {
                 error!("Challenge is None!")
@@ -97,7 +101,7 @@ async fn await_csr(mut ord_new: NewOrder, domain: &str) -> Result<CsrOrder, Erro
     }
 
     // Call recursively until we get what we want
-    await_csr(ord_new, domain).await
+    await_csr(config, ord_new, domain).await
 }
 
 
@@ -172,10 +176,13 @@ async fn read_certificate_expiry_date(
 
 
 #[instrument(skip(domain))]
-async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> {
-    // Use DirectoryUrl::LetsEncrypStaging for dev/testing.
-    let url = match get_env_value_or_panic("LE_STAGING").as_ref() {
-        "YES" | "yes" | "1" | "true" => DirectoryUrl::LetsEncryptStaging,
+async fn request_certificate(
+    config: &Config,
+    domain: &str,
+    wildcard: bool,
+) -> Result<(), Error> {
+    let url = match config.acme_staging().await {
+        true => DirectoryUrl::LetsEncryptStaging,
         _ => DirectoryUrl::LetsEncrypt,
     };
     info!("Using LE url: {url:?}");
@@ -183,12 +190,15 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     // Create a directory entrypoint.
     let dir = Directory::from_url(url).await?;
 
-    // Your contact addresses, note the `mailto:`
-    let le_contact = get_env_value_or_panic("LE_CONTACT");
-    let contact = vec![format!("mailto:{le_contact}")];
+    let contacts = config
+        .contacts_of(domain)
+        .await
+        .iter()
+        .map(|contact| format!("mailto:{contact}"))
+        .collect();
 
     // Generate a account.key if doesn't exist and register an account with your ACME provider:
-    let account = load_or_generate_new_account(&contact, &dir).await?;
+    let account = load_or_generate_new_account(&contacts, &dir).await?;
 
     let domain_dir = if wildcard {
         format!("wild_{domain}")
@@ -225,7 +235,7 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     // If the ownership of the domain(s) have already been
     // authorized in a previous order, you might be able to
     // skip validation. The ACME API provider decides.
-    let ord_csr = await_csr(ord_new, domain).await?;
+    let ord_csr = await_csr(config, ord_new, domain).await?;
 
     // Submit the CSR. This causes the ACME provider to enter a
     // state of "processing" that must be polled until the
@@ -242,7 +252,7 @@ async fn request_certificate(domain: &str, wildcard: bool) -> Result<(), Error> 
     cert_file.write_all(cert.certificate().as_bytes()).await?;
 
     // send success notification using a Slack webhook
-    let slack_webhook = get_env_value_or_panic("SLACK_WEBHOOK");
+    let slack_webhook = config.slack_webhook().await;
     let message = if wildcard {
         format!("Certificate renewal succeeded for the domain: *.{domain}.")
     } else {
