@@ -93,7 +93,7 @@ async fn await_csr(
 
     if status == "invalid" {
         let api_problem = ApiProblem{
-            detail: Some("Invalid status means that something went wrong with the LE API or DNS TXT record mismatch. Will try again later.".to_string()),
+            detail: Some("Invalid status means that something went wrong with the LE API. Will try again later.".to_string()),
             subproblems: None,
             _type: String::from("ApiProblem")
         };
