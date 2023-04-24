@@ -74,6 +74,8 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
 
 # Production Configuration:
 
+> NOTE: I hold the configuration under `/Services/Certsd/service.conf`, all keys and generated certificates under `/Services/Certsd`.
+
 ```ron
 (
     acme_staging: false,
@@ -88,6 +90,14 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
 
     slack_webhook: "https://hooks.slack.com/services/AAAAAAAAAAA/AAAAAAAAAAA/AAAAAAAAAAAAAAAAAAAAAA",
 )
+```
+
+
+# Production cron entry example:
+
+```cron
+# run certsd every 7 days, 30 minutes before midnight:
+30 23 7,14,24 * * "cd /Services/Certsd && /Software/Certsd/exports/certsd >> /var/log/renew-example.com.log"
 ```
 
 
