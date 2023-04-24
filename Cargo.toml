@@ -2,6 +2,14 @@
 name = "certsd"
 version = "0.6.1"
 edition = "2021"
+authors = ["Daniel (dmilith) Dettlaff <dmilith@me.com>"]
+description = "CertsD - automated, asynchronous LE certificate issuer."
+keywords = ["acme"]
+categories = ["asynchronous"]
+homepage = "https://github.com/VerKnowSys/certsd-open"
+license = "MIT"
+edition = "2021"
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
