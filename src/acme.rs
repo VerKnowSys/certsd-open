@@ -16,19 +16,19 @@ use std::{path::Path, time::Duration};
 use tokio::{fs::File, io::AsyncWriteExt, task::spawn_blocking};
 
 
-#[instrument]
+#[instrument(skip(config))]
 pub async fn get_cert(config: &Config, domain: &str) -> Result<(), Error> {
     request_certificate(config, domain, false).await
 }
 
 
-#[instrument]
+#[instrument(skip(config))]
 pub async fn get_cert_wildcard(config: &Config, domain: &str) -> Result<(), Error> {
     request_certificate(config, domain, true).await
 }
 
 
-#[instrument(skip(ord_new, domain))]
+#[instrument(skip(config, ord_new, domain))]
 #[async_recursion]
 async fn await_csr(
     config: &Config,
@@ -175,7 +175,7 @@ async fn read_certificate_expiry_date(
 }
 
 
-#[instrument(skip(domain))]
+#[instrument(skip(config, domain))]
 async fn request_certificate(
     config: &Config,
     domain: &str,

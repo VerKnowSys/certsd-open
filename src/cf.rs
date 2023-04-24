@@ -12,6 +12,7 @@ use cloudflare::{
 };
 
 
+#[instrument(skip(config))]
 pub async fn delete_acme_dns_txt_entries(
     config: &Config,
     domain: &str,
@@ -32,6 +33,7 @@ pub async fn delete_acme_dns_txt_entries(
 }
 
 
+#[instrument(skip(config))]
 pub async fn list_acme_txt_records(
     config: &Config,
     domain: &str,
@@ -78,6 +80,7 @@ pub async fn list_acme_txt_records(
 }
 
 
+#[instrument(skip(config))]
 pub async fn delete_txt_record(
     config: &Config,
     domain: &str,
@@ -102,6 +105,7 @@ pub async fn delete_txt_record(
 }
 
 
+#[instrument(skip(config))]
 pub async fn create_txt_record(
     config: &Config,
     domain: &str,
