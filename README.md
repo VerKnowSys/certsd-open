@@ -63,7 +63,7 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
 
 - From time to time the ACME API responds with a random "invalid" status just because. Don't panic. Be patient.
 
-- If you won't remove one of `account`.key` + `example.com/domain.key` + `wild_example.com/domain.key` too often, the ACME is likely to renew your certs faster without any issues (ACME cert caching mechanism).
+- If you won't remove one of (`account`.key` + `example.com/domain.key` + `wild_example.com/domain.key`) too often, the ACME is likely to renew your certs faster without any issues (ACME cert caching mechanism).
 
 - If you want to use ACME Staging for testing, set the `acme_staging: true` in your configuration.
 
