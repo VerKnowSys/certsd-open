@@ -1,0 +1,21 @@
+[package]
+name = "certsd"
+version = "0.6.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tracing = { version = "0.1.36", features = ["log", "attributes", "std"] }
+tracing-subscriber = { version = "0.3.15", features = ["registry", "fmt", "env-filter"] }
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "1.0.70"
+tokio = { version = "1.27.0", features = ["macros", "tokio-macros", "fs"] }
+cloudflare = "0.10.1"
+hyperacme = "0.0.3"
+openssl = "0.10.50"
+async-recursion = "1.0.4"
+chrono = "0.4.24"
+slack-hooked = "0.9.0"
+retry = "2.0.0"
+ron = "0.8.0"
