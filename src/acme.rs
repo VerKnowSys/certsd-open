@@ -250,12 +250,14 @@ async fn request_certificate(
 
     let mut cert_file = File::create(chained_certifcate_file.to_owned()).await?;
     let today_date = today.date_naive();
-    info!("Making a copy of the previous certificate to: {today_date}");
-    tokio::fs::copy(
-        &chained_certifcate_file,
-        format!("{}-{}", &chained_certifcate_file, today_date),
-    )
-    .await?;
+    if Path::new(&chained_certifcate_file).exists() {
+        info!("Making a copy of the previous certificate to: {today_date}");
+        tokio::fs::copy(
+            &chained_certifcate_file,
+            format!("{}-{}", &chained_certifcate_file, today_date),
+        )
+        .await?;
+    }
     cert_file.write_all(cert.certificate().as_bytes()).await?;
 
     // send success notification using a Slack webhook
