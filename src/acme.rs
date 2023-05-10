@@ -212,12 +212,12 @@ async fn request_certificate(
     let domain_key = load_or_generate_domain_key(&domain_key_filename, &domain_dir).await?;
 
     // check if the current Certificate is fresh enough
+    let today = Local::now();
     let chained_certifcate_file = format!("{domain_dir}/chained.pem");
     if Path::new(&chained_certifcate_file).exists() {
         info!("Previous certificate exists: {chained_certifcate_file}.");
         let expiry_date =
             read_certificate_expiry_date(&chained_certifcate_file, &domain_key).await?;
-        let today = Local::now();
         let today_plus_2_months = today + Months::new(2);
         if today_plus_2_months < expiry_date {
             info!("Certificate expires at: {expiry_date}. No need to renew.");
@@ -248,7 +248,14 @@ async fn request_certificate(
     // Now download the certificate. Also stores the cert persistently.
     let cert = ord_cert.download_cert().await?;
 
-    let mut cert_file = File::create(chained_certifcate_file).await?;
+    let mut cert_file = File::create(chained_certifcate_file.to_owned()).await?;
+    let today_date = today.date_naive();
+    info!("Making a copy of the previous certificate to: {today_date}");
+    tokio::fs::copy(
+        &chained_certifcate_file,
+        format!("{}-{}", &chained_certifcate_file, today_date),
+    )
+    .await?;
     cert_file.write_all(cert.certificate().as_bytes()).await?;
 
     // send success notification using a Slack webhook
