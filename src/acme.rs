@@ -65,7 +65,12 @@ async fn await_csr(
                 // confirm ownership of the domain, or fail due to the
                 // not finding the proof. To see the change, we poll
                 // the API with pause between.
-                match challenge.validate(Duration::from_millis(15000)).await {
+                match challenge
+                    .validate(Duration::from_millis(
+                        DEFAULT_ACME_CHALLENGE_VALIDATION_PAUSE_MS,
+                    ))
+                    .await
+                {
                     Ok(_) => {
                         info!("Challenge validated.");
                     }
@@ -246,8 +251,8 @@ async fn request_certificate(
         info!("Previous certificate exists: {chained_certifcate_file}.");
         let expiry_date =
             read_certificate_expiry_date(&chained_certifcate_file, &domain_key).await?;
-        let today_plus_2_months = today + Months::new(2);
-        if today_plus_2_months < expiry_date {
+        let today_plus_n_months = today + Months::new(DEFAULT_MAX_CERT_VALIDITY_IN_MONTHS);
+        if today_plus_n_months < expiry_date {
             info!("Certificate expires at: {expiry_date}. No need to renew.");
             return Ok(());
         }
