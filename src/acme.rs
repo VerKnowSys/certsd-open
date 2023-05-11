@@ -3,6 +3,7 @@ use async_recursion::async_recursion;
 use hyperacme::Certificate;
 use hyperacme::{order::CsrOrder, Account};
 use std::os::unix::fs::PermissionsExt;
+use tokio::time::sleep;
 
 use chrono::{prelude::*, Months};
 use hyperacme::{
@@ -18,13 +19,13 @@ use tokio::{fs::File, io::AsyncWriteExt, task::spawn_blocking};
 
 #[instrument(skip(config))]
 pub async fn get_cert(config: &Config, domain: &str) -> Result<(), Error> {
-    request_certificate(config, domain, false).await
+    request_certificate(config, domain, false, 1).await
 }
 
 
 #[instrument(skip(config))]
 pub async fn get_cert_wildcard(config: &Config, domain: &str) -> Result<(), Error> {
-    request_certificate(config, domain, true).await
+    request_certificate(config, domain, true, 1).await
 }
 
 
@@ -175,12 +176,36 @@ async fn read_certificate_expiry_date(
 }
 
 
+// Order a new TLS certificate for a domain.
+#[instrument(skip(account))]
+async fn create_new_order(
+    account: &Account,
+    domain: &str,
+    wildcard: bool,
+) -> Result<NewOrder, Error> {
+    if wildcard {
+        account.new_order(&format!("*.{domain}"), &[]).await
+    } else {
+        account.new_order(domain, &[]).await
+    }
+}
+
+
+#[async_recursion]
 #[instrument(skip(config, domain))]
 async fn request_certificate(
     config: &Config,
     domain: &str,
     wildcard: bool,
+    attempts: usize,
 ) -> Result<(), Error> {
+    if attempts > DEFAULT_MAX_ATTEMPTS {
+        let err =
+            "Reached max retry attempts: {DEFAULT_MAX_ATTEMPTS}. Check the API credentials."
+                .to_owned();
+        error!("{err}");
+        return Err(hyperacme::Error::GeneralError(err));
+    }
     let url = match config.acme_staging().await {
         true => DirectoryUrl::LetsEncryptStaging,
         _ => DirectoryUrl::LetsEncrypt,
@@ -225,17 +250,28 @@ async fn request_certificate(
         }
     }
 
-    // Order a new TLS certificate for a domain.
-    let ord_new = if wildcard {
-        account.new_order(&format!("*.{domain}"), &[]).await?
-    } else {
-        account.new_order(domain, &[]).await?
-    };
+    let ord_new = create_new_order(&account, domain, wildcard)
+        .await
+        .map(|ord_new| await_csr(config, ord_new, domain))?
+        .await;
 
     // If the ownership of the domain(s) have already been
     // authorized in a previous order, you might be able to
     // skip validation. The ACME API provider decides.
-    let ord_csr = await_csr(config, ord_new, domain).await?;
+    let error_pause = sleep(Duration::from_millis(30000));
+    let ord_csr = match ord_new {
+        Ok(order) => order,
+        Err(Error::ApiProblem(_api_problem)) => {
+            warn!("Invalid state from the ACME. Waiting 30s to retry");
+            error_pause.await;
+            return request_certificate(config, domain, wildcard, attempts + 1).await;
+        }
+        Err(err) => {
+            warn!("Unhandled error: {err:?}. Waiting 30s to retry.");
+            error_pause.await;
+            return request_certificate(config, domain, wildcard, attempts + 1).await;
+        }
+    };
 
     // Submit the CSR. This causes the ACME provider to enter a
     // state of "processing" that must be polled until the
@@ -245,19 +281,21 @@ async fn request_certificate(
         .finalize_pkey(domain_key.to_owned(), Duration::from_millis(5000))
         .await?;
 
-    // Now download the certificate. Also stores the cert persistently.
-    let cert = ord_cert.download_cert().await?;
-
-    let mut cert_file = File::create(chained_certifcate_file.to_owned()).await?;
     let today_date = today.date_naive();
     if Path::new(&chained_certifcate_file).exists() {
-        info!("Making a copy of the previous certificate to: {today_date}");
+        info!(
+            "Making a copy of the previous certificate to: {chained_certifcate_file}-{today_date}"
+        );
         tokio::fs::copy(
             &chained_certifcate_file,
             format!("{}-{}", &chained_certifcate_file, today_date),
         )
         .await?;
     }
+
+    // Now download the certificate. Also stores the cert persistently.
+    let cert = ord_cert.download_cert().await?;
+    let mut cert_file = File::create(chained_certifcate_file.to_owned()).await?;
     cert_file.write_all(cert.certificate().as_bytes()).await?;
 
     // send success notification using a Slack webhook
