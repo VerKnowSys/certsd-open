@@ -245,19 +245,21 @@ async fn request_certificate(
         .finalize_pkey(domain_key.to_owned(), Duration::from_millis(5000))
         .await?;
 
-    // Now download the certificate. Also stores the cert persistently.
-    let cert = ord_cert.download_cert().await?;
-
-    let mut cert_file = File::create(chained_certifcate_file.to_owned()).await?;
     let today_date = today.date_naive();
     if Path::new(&chained_certifcate_file).exists() {
-        info!("Making a copy of the previous certificate to: {today_date}");
+        info!(
+            "Making a copy of the previous certificate to: {chained_certifcate_file}-{today_date}"
+        );
         tokio::fs::copy(
             &chained_certifcate_file,
             format!("{}-{}", &chained_certifcate_file, today_date),
         )
         .await?;
     }
+
+    // Now download the certificate. Also stores the cert persistently.
+    let cert = ord_cert.download_cert().await?;
+    let mut cert_file = File::create(chained_certifcate_file.to_owned()).await?;
     cert_file.write_all(cert.certificate().as_bytes()).await?;
 
     // send success notification using a Slack webhook
