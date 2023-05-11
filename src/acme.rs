@@ -19,13 +19,13 @@ use tokio::{fs::File, io::AsyncWriteExt, task::spawn_blocking};
 
 #[instrument(skip(config))]
 pub async fn get_cert(config: &Config, domain: &str) -> Result<(), Error> {
-    request_certificate(config, domain, false).await
+    request_certificate(config, domain, false, 1).await
 }
 
 
 #[instrument(skip(config))]
 pub async fn get_cert_wildcard(config: &Config, domain: &str) -> Result<(), Error> {
-    request_certificate(config, domain, true).await
+    request_certificate(config, domain, true, 1).await
 }
 
 
@@ -197,7 +197,15 @@ async fn request_certificate(
     config: &Config,
     domain: &str,
     wildcard: bool,
+    attempts: usize,
 ) -> Result<(), Error> {
+    if attempts > DEFAULT_MAX_ATTEMPTS {
+        let err =
+            "Reached max retry attempts: {DEFAULT_MAX_ATTEMPTS}. Check the API credentials."
+                .to_owned();
+        error!("{err}");
+        return Err(hyperacme::Error::GeneralError(err));
+    }
     let url = match config.acme_staging().await {
         true => DirectoryUrl::LetsEncryptStaging,
         _ => DirectoryUrl::LetsEncrypt,
@@ -256,12 +264,12 @@ async fn request_certificate(
         Err(Error::ApiProblem(_api_problem)) => {
             warn!("Invalid state from the ACME. Waiting 30s to retry");
             error_pause.await;
-            return request_certificate(config, domain, wildcard).await;
+            return request_certificate(config, domain, wildcard, attempts + 1).await;
         }
         Err(err) => {
             warn!("Unhandled error: {err:?}. Waiting 30s to retry.");
             error_pause.await;
-            return request_certificate(config, domain, wildcard).await;
+            return request_certificate(config, domain, wildcard, attempts + 1).await;
         }
     };
 
