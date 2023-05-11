@@ -3,6 +3,7 @@ use async_recursion::async_recursion;
 use hyperacme::Certificate;
 use hyperacme::{order::CsrOrder, Account};
 use std::os::unix::fs::PermissionsExt;
+use tokio::time::sleep;
 
 use chrono::{prelude::*, Months};
 use hyperacme::{
@@ -190,6 +191,7 @@ async fn create_new_order(
 }
 
 
+#[async_recursion]
 #[instrument(skip(config, domain))]
 async fn request_certificate(
     config: &Config,
@@ -240,17 +242,28 @@ async fn request_certificate(
         }
     }
 
-    // Order a new TLS certificate for a domain.
-    let ord_new = if wildcard {
-        account.new_order(&format!("*.{domain}"), &[]).await?
-    } else {
-        account.new_order(domain, &[]).await?
-    };
+    let ord_new = create_new_order(&account, domain, wildcard)
+        .await
+        .map(|ord_new| await_csr(config, ord_new, domain))?
+        .await;
 
     // If the ownership of the domain(s) have already been
     // authorized in a previous order, you might be able to
     // skip validation. The ACME API provider decides.
-    let ord_csr = await_csr(config, ord_new, domain).await?;
+    let error_pause = sleep(Duration::from_millis(30000));
+    let ord_csr = match ord_new {
+        Ok(order) => order,
+        Err(Error::ApiProblem(_api_problem)) => {
+            warn!("Invalid state from the ACME. Waiting 30s to retry");
+            error_pause.await;
+            return request_certificate(config, domain, wildcard).await;
+        }
+        Err(err) => {
+            warn!("Unhandled error: {err:?}. Waiting 30s to retry.");
+            error_pause.await;
+            return request_certificate(config, domain, wildcard).await;
+        }
+    };
 
     // Submit the CSR. This causes the ACME provider to enter a
     // state of "processing" that must be polled until the
