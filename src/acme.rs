@@ -1,20 +1,23 @@
 use crate::*;
-use async_recursion::async_recursion;
-use hyperacme::Certificate;
-use hyperacme::{order::CsrOrder, Account};
-use std::os::unix::fs::PermissionsExt;
-use tokio::time::sleep;
 
+use async_recursion::async_recursion;
 use chrono::{prelude::*, Months};
 use hyperacme::{
-    api::ApiProblem, create_p384_key, order::NewOrder, Directory, DirectoryUrl, Error,
+    api::ApiProblem,
+    create_p384_key,
+    order::{CsrOrder, NewOrder},
+    Account, Certificate, Directory, DirectoryUrl, Error,
 };
 use openssl::{
     ec::EcKey,
     pkey::{PKey, Private},
 };
-use std::{path::Path, time::Duration};
-use tokio::{fs::File, io::AsyncWriteExt, task::spawn_blocking};
+use std::{os::unix::fs::PermissionsExt, path::Path};
+use tokio::{
+    fs::File,
+    io::AsyncWriteExt,
+    time::{sleep, Duration},
+};
 
 
 #[instrument(skip(config))]
@@ -258,7 +261,7 @@ async fn request_certificate(
     // If the ownership of the domain(s) have already been
     // authorized in a previous order, you might be able to
     // skip validation. The ACME API provider decides.
-    let error_pause = sleep(Duration::from_millis(30000));
+    let error_pause = sleep(Duration::from_millis(DEFAULT_ACME_INVALID_STATUS_PAUSE_MS));
     let ord_csr = match ord_new {
         Ok(order) => order,
         Err(Error::ApiProblem(_api_problem)) => {
@@ -278,7 +281,10 @@ async fn request_certificate(
     // certificate is either issued or rejected. Again we poll
     // for the status change.
     let ord_cert = ord_csr
-        .finalize_pkey(domain_key.to_owned(), Duration::from_millis(5000))
+        .finalize_pkey(
+            domain_key.to_owned(),
+            Duration::from_millis(DEFAULT_ACME_POLL_PAUSE_MS),
+        )
         .await?;
 
     let today_date = today.date_naive();
@@ -298,18 +304,9 @@ async fn request_certificate(
     let mut cert_file = File::create(chained_certifcate_file.to_owned()).await?;
     cert_file.write_all(cert.certificate().as_bytes()).await?;
 
-    // send success notification using a Slack webhook
-    let slack_webhook = config.slack_webhook().await;
-    let message = if wildcard {
-        format!("Certificate renewal succeeded for the domain: *.{domain}.")
-    } else {
-        format!("Certificate renewal succeeded for the domain: {domain}.")
-    };
-    spawn_blocking(move || {
-        notify_success(&slack_webhook, &message);
-    })
-    .await
-    .unwrap_or_default();
+    notify_success_with_retry(config, domain, wildcard)
+        .await
+        .unwrap_or_default();
 
     info!("Ready");
     Ok(())

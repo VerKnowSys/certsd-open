@@ -5,8 +5,6 @@ use serde::Deserialize;
 use std::path::Path;
 use tokio::fs::read_to_string;
 
-pub const DEFAULT_MAX_ATTEMPTS: usize = 5;
-
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Config {
