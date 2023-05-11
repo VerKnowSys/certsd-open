@@ -1,6 +1,6 @@
 [package]
 name = "certsd"
-version = "0.6.3"
+version = "0.6.4"
 edition = "2021"
 authors = ["Daniel (dmilith) Dettlaff <dmilith@me.com>"]
 description = "CertsD - automated, asynchronous LE certificate issuer."
