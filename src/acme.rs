@@ -175,6 +175,21 @@ async fn read_certificate_expiry_date(
 }
 
 
+// Order a new TLS certificate for a domain.
+#[instrument(skip(account))]
+async fn create_new_order(
+    account: &Account,
+    domain: &str,
+    wildcard: bool,
+) -> Result<NewOrder, Error> {
+    if wildcard {
+        account.new_order(&format!("*.{domain}"), &[]).await
+    } else {
+        account.new_order(domain, &[]).await
+    }
+}
+
+
 #[instrument(skip(config, domain))]
 async fn request_certificate(
     config: &Config,
