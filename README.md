@@ -21,7 +21,7 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
 
 - Notifies Slack using a Webhook after a successful renewal.
 
-- Asynchronous by default (except the Slack notification part).
+- Asynchronous by default.
 
 
 
