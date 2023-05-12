@@ -208,9 +208,9 @@ async fn request_certificate(
     attempts: usize,
 ) -> Result<(), Error> {
     if attempts > DEFAULT_MAX_ATTEMPTS {
-        let err =
+        let err = format!(
             "Reached max retry attempts: {DEFAULT_MAX_ATTEMPTS}. Check the API credentials."
-                .to_owned();
+        );
         error!("{err}");
         return Err(hyperacme::Error::GeneralError(err));
     }
