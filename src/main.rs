@@ -55,7 +55,10 @@ async fn main() -> Result<(), Error> {
     };
 
     let domains = config.domains().await;
-    info!("Processing domains: {domains:?}");
+    let version = env!("CARGO_PKG_VERSION");
+    info!(
+        "{DEFAULT_SLACK_NAME} v{version} will generate certificates for domains: {domains:?}"
+    );
     for domain in domains {
         get_cert_wildcard(&config, &domain)
             .await
