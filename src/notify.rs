@@ -5,6 +5,54 @@ use tokio::time::Duration;
 use try_again::{retry_async, Delay, Retry, TokioSleep};
 
 
+#[derive(Debug, Clone, Deserialize, Default)]
+pub enum NotifyWith {
+    Slack {
+        webhook: String,
+    },
+    Telegram {
+        chat_id: String,
+        token: String,
+    },
+
+    #[default]
+    None,
+}
+
+
+impl NotifyWith {
+    pub async fn notify(&self, message: &str) -> Result<(), anyhow::Error> {
+        match self {
+            NotifyWith::Slack {
+                webhook,
+            } => {
+                info!("Slack notification");
+                notify_success_slack(&webhook.to_owned(), message)
+                    .await
+                    .map_err(Into::into)
+            }
+            NotifyWith::Telegram {
+                chat_id,
+                token,
+            } => {
+                info!("Telegram notification");
+                notify_success_telegram(
+                    ChatId::StringType(chat_id.to_owned()),
+                    &token.to_owned(),
+                    message,
+                )
+                .await
+                .map_err(Into::into)
+            }
+            NotifyWith::None => {
+                info!("No notification");
+                Ok(())
+            }
+        }
+    }
+}
+
+
 /// Sends success notification to Slack
 #[instrument]
 pub async fn notify_success(webhook: &str, message: &str) -> Result<(), SlackError> {
