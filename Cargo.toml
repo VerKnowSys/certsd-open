@@ -26,6 +26,7 @@ chrono = "0.4.24"
 ron = "0.8.0"
 slack-hook2 = "0.10.1"
 try-again = "0.1.1"
+telegram-bot-api = "0.1.2"
 
 
 # The release profile, used for `cargo build --release`.
