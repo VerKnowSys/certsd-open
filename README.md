@@ -43,7 +43,7 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
 
 - Attempt to reuse all non-existent key files (`account.key` + `example.com/domain.key` + `wild_example.com/domain.key`) or generates them automatically.
 
-- Validate the expiration date of both certs (`example.com/chained.pem` and `wild_example.com/chained.pem`). By default, ACME provides certificates valid for 90 days. Based on that CertsD will only renew certificates that have less than 60 days of validity time.
+- Validate the expiration date of both certs (`example.com/chained.pem` and `wild_example.com/chained.pem`). By default, ACME provides certificates valid for 90 days. Based on that CertsD will only renew certificates that have less than 60 days of validity time left.
 
 - ACME process creates the DNS challenge.
 
