@@ -57,7 +57,9 @@ async fn await_csr(
                 let proof_code = challenge.dns_proof().await?;
                 match create_txt_record(config, domain, &proof_code).await {
                     Ok(_) => info!("DNS TXT record created"),
-                    Err(_e) => {} //info!("DNS record already defined!")
+                    Err(err) => {
+                        error!("Failed to create DNS TXT record. Error: {err:?}");
+                    }
                 }
                 ord_new.refresh().await?;
 
@@ -75,7 +77,7 @@ async fn await_csr(
                         info!("Challenge validated.");
                     }
                     Err(e) => {
-                        debug!("Failed validation. Error {e:#?}");
+                        debug!("Failed validation. Error {e:?}");
                     }
                 }
                 ord_new.refresh().await?;
