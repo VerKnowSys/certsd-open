@@ -23,7 +23,7 @@ pub async fn delete_acme_dns_txt_entries(
             for entry in the_list {
                 match delete_txt_record(config, domain, &entry).await {
                     Ok(_) => info!("DNS TXT record destroyed"),
-                    Err(_) => info!("No DNS record to destroy"),
+                    Err(_) => error!("No DNS record to destroy"),
                 }
             }
         }
@@ -34,10 +34,7 @@ pub async fn delete_acme_dns_txt_entries(
 
 
 #[instrument(skip(config))]
-pub async fn list_acme_txt_records(
-    config: &Config,
-    domain: &str,
-) -> Result<Vec<String>, anyhow::Error> {
+pub async fn list_acme_txt_records(config: &Config, domain: &str) -> Result<Vec<String>> {
     let zone_id = config.zone_id_of(domain).await;
     let client = Client::new(
         Credentials::UserAuthToken {
@@ -85,7 +82,7 @@ pub async fn delete_txt_record(
     config: &Config,
     domain: &str,
     id: &str,
-) -> Result<ApiSuccess<DeleteDnsRecordResponse>, anyhow::Error> {
+) -> Result<ApiSuccess<DeleteDnsRecordResponse>> {
     let zone_id = config.zone_id_of(domain).await;
     let client = Client::new(
         Credentials::UserAuthToken {
@@ -110,7 +107,7 @@ pub async fn create_txt_record(
     config: &Config,
     domain: &str,
     content: &str,
-) -> Result<ApiSuccess<DnsRecord>, anyhow::Error> {
+) -> Result<ApiSuccess<DnsRecord>> {
     let zone_id = config.zone_id_of(domain).await;
     let client = Client::new(
         Credentials::UserAuthToken {
