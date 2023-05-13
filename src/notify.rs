@@ -101,6 +101,25 @@ pub async fn notify_success_with_retry(
 }
 
 
+#[instrument]
+pub async fn notify_telegram(
+    chat_id: ChatId,
+    token: &str,
+    message: &str,
+    icon: &str,
+    fail: bool,
+) -> Result<(), SlackError> {
+    if token.is_empty() {
+        warn!("Telegram Token undefined. Notifications will not be sent.");
+        return Ok(());
+    }
+    let botapi = BotApi::new(String::from(token), None).await.unwrap();
+    let send_message = SendMessage::new(chat_id, String::from(message));
+    botapi.send_message(send_message).await.unwrap();
+    Ok(())
+}
+
+
 /// Sends generic notification over Slack
 #[instrument]
 async fn notify(
