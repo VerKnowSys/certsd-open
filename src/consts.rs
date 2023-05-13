@@ -8,7 +8,7 @@ pub const DEFAULT_MAX_ATTEMPTS: usize = 5;
 pub const DEFAULT_MAX_NOTIFICATION_RETRIES: usize = 5;
 
 /// When notification fails, pause this amount of time before trying again
-pub const DEFAULT_NOTIFICATION_RETRT_PAUSE_MS: u64 = 5000;
+pub const DEFAULT_NOTIFICATION_RETRY_PAUSE_MS: u64 = 5000;
 
 /// ACME poll time when awaiting for the certificate
 pub const DEFAULT_ACME_POLL_PAUSE_MS: u64 = 5000;

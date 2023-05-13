@@ -1,6 +1,9 @@
 use crate::*;
 
+use serde::Deserialize;
 use slack_hook2::{AttachmentBuilder, PayloadBuilder, Slack, SlackError};
+use telegram_bot_api::{bot::*, methods::SendMessage, types::ChatId};
+
 use tokio::time::Duration;
 use try_again::{retry_async, Delay, Retry, TokioSleep};
 
@@ -55,17 +58,21 @@ impl NotifyWith {
 
 /// Sends success notification to Slack
 #[instrument]
-pub async fn notify_success(webhook: &str, message: &str) -> Result<(), SlackError> {
+pub async fn notify_success_slack(webhook: &str, message: &str) -> Result<(), SlackError> {
     let success_emoji = String::from(DEFAULT_SLACK_SUCCESS_ICON);
-    notify(webhook, message, &success_emoji, false).await
+    notify_slack(webhook, message, &success_emoji, false).await
 }
 
 
-/// Sends failure notification to Slack
+/// Sends success notification to Telegram
 #[instrument]
-pub async fn notify_failure(webhook: &str, message: &str) -> Result<(), SlackError> {
-    let failure_emoji = String::from(DEFAULT_SLACK_FAILURE_ICON);
-    notify(webhook, message, &failure_emoji, true).await
+pub async fn notify_success_telegram(
+    chat_id: ChatId,
+    token: &str,
+    message: &str,
+) -> Result<(), SlackError> {
+    let success_emoji = String::from(DEFAULT_SLACK_SUCCESS_ICON);
+    notify_telegram(chat_id, token, message, &success_emoji, false).await
 }
 
 
@@ -75,25 +82,27 @@ pub async fn notify_success_with_retry(
     config: &Config,
     domain: &str,
     wildcard: bool,
-) -> Result<(), SlackError> {
-    // send success notification using a Slack webhook
+) -> Result<(), anyhow::Error> {
+    // send success notification using all defined notification methods
     retry_async(
         Retry {
             max_tries: DEFAULT_MAX_NOTIFICATION_RETRIES,
             delay: Some(Delay::Static {
-                delay: Duration::from_millis(DEFAULT_NOTIFICATION_RETRT_PAUSE_MS),
+                delay: Duration::from_millis(DEFAULT_NOTIFICATION_RETRY_PAUSE_MS),
             }),
         },
         TokioSleep {},
         move || {
             async move {
-                let slack_webhook = &config.slack_webhook().await;
                 let message = if wildcard {
                     format!("Certificate renewal succeeded for the domain: *.{domain}.")
                 } else {
                     format!("Certificate renewal succeeded for the domain: {domain}.")
                 };
-                notify_success(&slack_webhook.to_owned(), &message).await
+                for notification_type in config.notifications.iter() {
+                    notification_type.notify(&message).await?
+                }
+                Ok(())
             }
         },
     )
@@ -122,14 +131,14 @@ pub async fn notify_telegram(
 
 /// Sends generic notification over Slack
 #[instrument]
-async fn notify(
+async fn notify_slack(
     webhook: &str,
     message: &str,
     icon: &str,
     fail: bool,
 ) -> Result<(), SlackError> {
     if webhook.is_empty() {
-        warn!("Webhook undefined. Notifications will not be sent.");
+        warn!("Slack Webhook undefined. Notifications will not be sent.");
         return Ok(());
     }
     let slack = Slack::new(webhook)?;
@@ -153,3 +162,34 @@ async fn notify(
 
     slack.send(&payload).await
 }
+
+
+// #[tokio::test]
+// async fn test_send_message() -> Result<(), anyhow::Error> {
+
+//     use super::*;
+//     initialize_logger();
+//     let config = Config::from("certsd.conf").await.unwrap();
+//     assert!(config.acme_staging().await);
+//     let telegram_kind = config.notifications.iter().find(|elem| {
+//         matches!(elem, NotifyWith::Telegram {
+//                 ..
+//             })
+//     });
+//     if let Some(telegram) = telegram_kind {
+//         let NotifyWith::Telegram {
+//             chat_id,
+//             token,
+//         } = telegram else { todo!() };
+//         notify_telegram(
+//             ChatId::StringType(chat_id.to_owned()),
+//             token,
+//             "Testowa wiadomość",
+//             "icon",
+//             false,
+//         )
+//         .await
+//         .unwrap();
+//     }
+//     Ok(())
+// }

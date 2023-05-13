@@ -6,4 +6,5 @@ pub mod notify;
 
 pub use crate::{acme::*, cf::*, config::*, consts::*, notify::*};
 pub use anyhow::anyhow;
+pub use anyhow::Result;
 pub use tracing::{debug, error, event, info, instrument, span, trace, warn, Level};
