@@ -3,8 +3,6 @@ use crate::*;
 use serde::Deserialize;
 use slack_hook2::{AttachmentBuilder, PayloadBuilder, Slack};
 use telegram_bot_api::{bot::*, methods::SendMessage, types::ChatId};
-use tokio::time::Duration;
-use try_again::{retry_async, Delay, Retry, TokioSleep};
 
 
 #[non_exhaustive]
@@ -81,35 +79,20 @@ pub async fn notify_success_telegram(
 
 /// Send notification to Slack with retry on failure
 #[instrument(skip(config, domain, wildcard))]
-pub async fn notify_success_with_retry(
+pub async fn notify_success(
     config: &Config,
     domain: &str,
     wildcard: bool,
 ) -> Result<()> {
-    // send success notification using all defined notification methods
-    retry_async(
-        Retry {
-            max_tries: DEFAULT_MAX_NOTIFICATION_RETRIES,
-            delay: Some(Delay::Static {
-                delay: Duration::from_millis(DEFAULT_NOTIFICATION_RETRY_PAUSE_MS),
-            }),
-        },
-        TokioSleep {},
-        move || {
-            async move {
-                let message = if wildcard {
-                    format!("Certificate renewal succeeded for the domain: *.{domain}.")
-                } else {
-                    format!("Certificate renewal succeeded for the domain: {domain}.")
-                };
-                for notification_type in config.notifications.iter() {
-                    notification_type.notify(&message).await?
-                }
-                Ok(())
-            }
-        },
-    )
-    .await
+    let message = if wildcard {
+        format!("Certificate renewal succeeded for the domain: *.{domain}.")
+    } else {
+        format!("Certificate renewal succeeded for the domain: {domain}.")
+    };
+    for notification_type in config.notifications.iter() {
+        notification_type.notify(&message).await.map_err(|e| error!("{e}")).unwrap_or_default();
+    }
+    Ok(())
 }
 
 

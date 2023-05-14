@@ -311,7 +311,7 @@ async fn request_certificate(
     let mut cert_file = File::create(chained_certifcate_file.to_owned()).await?;
     cert_file.write_all(cert.certificate().as_bytes()).await?;
 
-    notify_success_with_retry(config, domain, wildcard)
+    notify_success(config, domain, wildcard)
         .await
         .unwrap_or_default();
 
