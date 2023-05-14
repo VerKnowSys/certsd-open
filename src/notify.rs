@@ -7,6 +7,7 @@ use tokio::time::Duration;
 use try_again::{retry_async, Delay, Retry, TokioSleep};
 
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize, Default)]
 pub enum NotifyWith {
     Slack {
