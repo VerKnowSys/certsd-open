@@ -7,6 +7,7 @@ use tokio::time::Duration;
 use try_again::{retry_async, Delay, Retry, TokioSleep};
 
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Deserialize, Default)]
 pub enum NotifyWith {
     Slack {
@@ -79,7 +80,7 @@ pub async fn notify_success_telegram(
 
 
 /// Send notification to Slack with retry on failure
-#[instrument(skip(config))]
+#[instrument(skip(config, domain, wildcard))]
 pub async fn notify_success_with_retry(
     config: &Config,
     domain: &str,
@@ -128,10 +129,17 @@ pub async fn notify_telegram(
         warn!("Telegram Token is undefined. Notifications will not be sent.");
         return Ok(());
     }
-    let botapi = BotApi::new(String::from(token), None).await.unwrap();
-    let send_message = SendMessage::new(ChatId::StringType(String::from(chat_id)), String::from(message));
-    botapi.send_message(send_message).await.unwrap();
-    Ok(())
+    let api = match BotApi::new(String::from(token), None).await {
+        Ok(api) => {
+            api
+        },
+        Err(err) => return Err(anyhow!("Telegram BotApi failed: {err:?}"))
+    };
+    let message = SendMessage::new(ChatId::StringType(String::from(chat_id)), String::from(message));
+    match api.send_message(message).await {
+        Ok(_sent) => Ok(()),
+        Err(err) => Err(anyhow!("Telegram BotApi couldn't connect to chat: {chat_id}. Error: {err:?}"))
+    }
 }
 
 
