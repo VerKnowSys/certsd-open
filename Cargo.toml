@@ -86,6 +86,6 @@ codegen-units = 8             # if > 1 enables parallel code generation which im
                               # compile times, but prevents some optimizations.
                               # Passes `-C codegen-units`.
 panic = 'unwind'              # panic strategy (`-C panic=...`), can also be 'abort'
-incremental = false           # whether or not incremental compilation is enabled
+incremental = true            # whether or not incremental compilation is enabled
 overflow-checks = true        # use overflow checks for integer arithmetic.
                               # Passes the `-C overflow-checks=...` flag to the compiler.
