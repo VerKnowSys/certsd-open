@@ -100,9 +100,18 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
             domain: "myexample.com",
             contacts: ["domains@example.com"],
         ),
+
+        // …
     ],
 
-    slack_webhook: "https://hooks.slack.com/services/AAAAAAAAAAA/AAAAAAAAAAA/AAAAAAAAAAAAAAAAAAAAAA",
+    notifications: [
+        Slack(webhook: "https://hooks.slack.com/services/111111111/33333333333/44444444444444444"),
+        Telegram(
+            chat_id: "@Public_Channel",
+            token: "1111111111111111111111111111111"
+        ),
+        // …
+    ]
 )
 ```
 
@@ -110,8 +119,8 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
 # Production cron entry example:
 
 ```cron
-# run certsd every 7 days, 30 minutes before midnight:
-30 23 7,14,24 * * "cd /Services/Certsd && /Software/Certsd/exports/certsd >> /var/log/renew-example.com.log"
+# run certsd every 10 days, 30 minutes before midnight:
+30 23 */10 * * "/Software/Certsd/exports/certsd >> /var/log/renew-example.com.log"
 ```
 
 
@@ -124,7 +133,7 @@ server {
    autoindex off;
 
    location ~ .*/chained.pem {
-       root   /var/www/certsd;
+       root   /etc/certsd/certs;
    }
 
    location / {

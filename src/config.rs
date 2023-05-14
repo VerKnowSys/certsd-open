@@ -22,21 +22,49 @@ pub struct CloudFlareAccount {
 }
 
 
+const CONFIG_PATHS: [&str; 5] = [
+    "/etc/certsd/certsd.conf",
+    "/Services/Certsd/service.conf",
+    "/Projects/certsd/certsd.conf",
+    "/Volumes/Projects/certsd/certsd.conf",
+    "certsd.conf",
+];
+
+
 impl Config {
     #[instrument]
-    pub async fn load() -> Result<Config, SpannedError> {
-        let config_paths = [
-            "/etc/certsd/certsd.conf",
-            "/Services/Certsd/service.conf",
-            "/Projects/certsd/certsd.conf",
-            "certsd.conf",
-        ];
-        let config_file: String = config_paths
+    pub async fn config_file() -> String {
+        CONFIG_PATHS
             .iter()
             .filter(|file| Path::new(file).exists())
             .take(1)
             .cloned()
-            .collect();
+            .collect()
+    }
+
+
+    #[instrument]
+    pub async fn config_dir() -> String {
+        let config_file = Self::config_file().await;
+        match Path::new(&config_file).parent() {
+            Some(path) if path.to_string_lossy().is_empty() => String::from("."),
+            Some(path) => path.to_string_lossy().to_string(),
+            None => String::from("."),
+        }
+    }
+
+
+    #[instrument]
+    pub async fn config_data_dir() -> Result<String> {
+        let data_dir = format!("{}/certs", Config::config_dir().await);
+        tokio::fs::create_dir_all(data_dir.to_owned()).await?;
+        Ok(data_dir)
+    }
+
+
+    #[instrument]
+    pub async fn load() -> Result<Config, SpannedError> {
+        let config_file = Self::config_file().await;
         info!("Loading the configuration from: {config_file}");
         from_str::<Config>(&read_to_string(config_file).await?)
     }
@@ -144,7 +172,7 @@ async fn test_config_load() -> Result<()> {
                 chat_id,
                 token,
             } => {
-                assert_eq!("@dmilith", chat_id);
+                assert_eq!("@Public_Channel", chat_id);
                 assert_eq!("1111111111111111111111111111111", token);
             }
 
