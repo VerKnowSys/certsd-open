@@ -1,5 +1,6 @@
 use certsd::*;
 use hyperacme::Error;
+use std::env::set_current_dir;
 
 
 #[instrument]
@@ -20,8 +21,13 @@ async fn main() -> Result<(), Error> {
 
     let domains = config.domains().await;
     let version = env!("CARGO_PKG_VERSION");
+    let config_dir = Config::config_data_dir().await.unwrap_or_default();
+    if let Err(_err) = set_current_dir(&config_dir) {
+        panic!("Couldn't change dir to: {config_dir}");
+    }
+
     info!(
-        "{DEFAULT_SLACK_NAME} v{version} will generate certificates for domains: {domains:?}"
+        "{DEFAULT_SLACK_NAME} v{version} will generate certificates for domains: {domains:?}. Certificates destination dir: {config_dir}"
     );
     for domain in domains {
         get_cert_wildcard(&config, &domain)
