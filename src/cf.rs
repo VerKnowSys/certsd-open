@@ -12,7 +12,7 @@ use cloudflare::{
 };
 
 
-#[instrument(skip(config))]
+#[instrument(skip(config, domain))]
 pub async fn delete_acme_dns_txt_entries(
     config: &Config,
     domain: &str,

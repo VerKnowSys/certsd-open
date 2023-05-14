@@ -80,7 +80,7 @@ pub async fn notify_success_telegram(
 
 
 /// Send notification to Slack with retry on failure
-#[instrument(skip(config))]
+#[instrument(skip(config, domain, wildcard))]
 pub async fn notify_success_with_retry(
     config: &Config,
     domain: &str,

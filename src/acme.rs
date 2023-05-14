@@ -48,7 +48,7 @@ async fn await_csr(
     let auths = ord_new.authorizations().await?;
     let auth = &auths[0]; // only a single wildcard per domain
     if auth.need_challenge().await {
-        info!("Pending {}", auth.domain_name().await);
+        info!("Pending the domain registration");
         match auth.dns_challenge().await {
             Some(challenge) => {
                 debug!("Deleting any previous DNS entries for domain: {domain}");
@@ -148,7 +148,7 @@ async fn set_private_key_permissions(file_name: &str) -> Result<(), Error> {
 }
 
 
-#[instrument]
+#[instrument(skip(domain_dir))]
 async fn load_or_generate_domain_key(
     domain_key_filename: &str,
     domain_dir: &str,
@@ -187,7 +187,7 @@ async fn read_certificate_expiry_date(
 
 
 // Order a new TLS certificate for a domain.
-#[instrument(skip(account))]
+#[instrument(skip(account, domain, wildcard))]
 async fn create_new_order(
     account: &Account,
     domain: &str,
@@ -202,7 +202,7 @@ async fn create_new_order(
 
 
 #[async_recursion]
-#[instrument(skip(config, domain))]
+#[instrument(skip(config, domain, attempts))]
 async fn request_certificate(
     config: &Config,
     domain: &str,
@@ -272,12 +272,12 @@ async fn request_certificate(
     let ord_csr = match ord_new {
         Ok(order) => order,
         Err(Error::ApiProblem(_api_problem)) => {
-            warn!("Invalid state from the ACME. Waiting 30s to retry");
+            warn!("Invalid state from the ACME. Waiting 30s to retry (attempts: {attempts})");
             error_pause.await;
             return request_certificate(config, domain, wildcard, attempts + 1).await;
         }
         Err(err) => {
-            warn!("Unhandled error: {err:?}. Waiting 30s to retry.");
+            warn!("Unhandled error: {err:?}. Waiting 30s to retry (attempts: {attempts})");
             error_pause.await;
             return request_certificate(config, domain, wildcard, attempts + 1).await;
         }
