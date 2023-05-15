@@ -9,7 +9,6 @@ categories = ["asynchronous"]
 homepage = "https://github.com/VerKnowSys/certsd-open"
 license = "MIT"
 
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -36,9 +35,8 @@ rpath = false
 lto = true
 debug-assertions = false
 codegen-units = 1
-panic = 'abort'
 incremental = false
-overflow-checks = true
+overflow-checks = false
 
 
 # The benchmarking profile, used for `cargo bench` and `cargo test --release`.
