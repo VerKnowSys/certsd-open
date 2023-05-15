@@ -1,0 +1,27 @@
+#!/bin/sh
+
+set -e
+
+unset CARGO_TARGET_DIR
+
+echo "Cleaning up the project…"
+cargo clean
+
+# bin/setup will unpack openssl deb for the cross compilation so it's important not to call cargo clean after this:
+. bin/setup
+
+echo "Refreshing the project…"
+git pull
+
+
+echo "Cross-compiling the project for the Linux-x86_64…"
+rustup run nightly xargo build -Zbuild-std --target x86_64-unknown-linux-gnu --release
+
+echo "Stripping the product…"
+${STRIP} target/x86_64-unknown-linux-gnu/release/certsd
+
+echo "Deploying…"
+. bin/deploy
+
+echo "Cleaning up…"
+. bin/clean

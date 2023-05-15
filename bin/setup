@@ -1,0 +1,60 @@
+#!/bin/sh
+
+which cargo >/dev/null 2>&1
+if [ "0" != "${?}" ]; then
+  echo "Missing Rust, installing it using rustup"
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+fi
+
+_uname="$(uname)"
+case "${_uname}" in
+  Darwin)
+    # local dev utils
+    cargo install xargo
+    cargo install flamegraph
+
+    # cross compile to Linux-x86_64:
+    rustup toolchain install nightly
+    rustup target add x86_64-unknown-linux-gnu
+    rustup +nightly component add rust-src
+    brew tap SergioBenitez/osxct
+    brew install x86_64-unknown-linux-gnu
+
+    _origin="https://software.verknowsys.com/c/libssl-dev_1.1.1n-0%2Bdeb11u3_amd64.deb"
+    _basename="${_origin##*/}"
+    unpack_openssl_linux () {
+      curl -O "${_origin}"
+      ar -x "${_basename}"
+      tar xf data.tar.xz
+      rm -rf "${_basename}"
+    }
+    (mkdir -p ./target && cd ./target && unpack_openssl_linux)
+
+    _cwd="$(pwd)"
+
+    # setup some env variables for the cross compiler to statically link with the OpenSSL library:
+    export OPENSSL_LIB_DIR="${_cwd}/target/usr/lib/x86_64-linux-gnu"
+    export OPENSSL_INCLUDE_DIR="${_cwd}/target/usr/include"
+    export TARGET_CFLAGS="-I${_cwd}/target/usr/include/x86_64-linux-gnu"
+
+    # pick proper cross linker for cargo:
+    export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-unknown-linux-gnu-gcc
+
+    # override CC, CPP, LD and the STRIP for the cross compilation:
+    export LD=/opt/homebrew/Cellar/x86_64-unknown-linux-gnu/7.2.0/bin/x86_64-unknown-linux-gnu-gcc
+    export CC=/opt/homebrew/Cellar/x86_64-unknown-linux-gnu/7.2.0/bin/x86_64-unknown-linux-gnu-gcc
+    export CPP=/opt/homebrew/Cellar/x86_64-unknown-linux-gnu/7.2.0/bin/x86_64-unknown-linux-gnu-cpp
+    export STRIP=/opt/homebrew/Cellar/x86_64-unknown-linux-gnu/7.2.0/bin/x86_64-unknown-linux-gnu-strip
+    ;;
+
+  Linux)
+    apt install -y pkg-config libssl-dev
+    ;;
+esac
+
+
+_cargo_env="$HOME/.cargo/env"
+if [ -f "${_cargo_env}" ]; then
+  echo "Loading ${_cargo_env}"
+  . "${_cargo_env}"
+fi
