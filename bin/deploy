@@ -1,0 +1,19 @@
+#!/bin/sh
+
+_linux_release_binary="target/x86_64-unknown-linux-gnu/release/certsd"
+if [ ! -f "${_linux_release_binary}" ]; then
+    echo "No certsd binary available: ${_linux_release_binary}"
+    exit 1
+fi
+
+echo "Cross compiled binary: ${_linux_release_binary}"
+echo
+echo "Continue with the deploy? ['Y' to continue]"
+read -r _ans
+
+if [ "Y" = "${_ans}" ]; then
+    echo "Deploying certsd to www-data@centra-certsd"
+    scp "${_linux_release_binary}" "www-data@centra-certsd:/usr/local/bin/certsd"
+fi
+
+echo "Done."
