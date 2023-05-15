@@ -38,10 +38,30 @@ async fn await_csr(
     config: &Config,
     mut ord_new: NewOrder,
     domain: &str,
+    status: &str,
+    order_attempts: usize,
 ) -> Result<CsrOrder, Error> {
     if let Some(ord_csr) = ord_new.confirm_validations().await {
         info!("Order confirmed.");
         return Ok(ord_csr);
+    }
+
+    if order_attempts > DEFAULT_MAX_ATTEMPTS {
+        let api_problem = ApiProblem {
+            detail: Some(format!(
+                "Failed to order a Certificate within the {DEFAULT_MAX_ATTEMPTS} max confirmation attempts."
+            )),
+            subproblems: None,
+            _type: String::from("ApiProblem"),
+        };
+        return Err(Error::ApiProblem(api_problem));
+    }
+
+    if status == "pending" {
+        info!("Awaiting");
+        sleep(Duration::from_millis(DEFAULT_ACME_POLL_PAUSE_MS)).await;
+        ord_new.refresh().await?;
+        return await_csr(config, ord_new, domain, status, order_attempts + 1).await;
     }
 
     // Get the possible authorizations
@@ -100,7 +120,7 @@ async fn await_csr(
         .to_owned()
         .status
         .unwrap_or("unknown".to_string());
-    info!("Status {status:?}");
+    info!("Order status: {status:?}");
 
     if status == "invalid" {
         let api_problem = ApiProblem{
@@ -112,7 +132,7 @@ async fn await_csr(
     }
 
     // Call recursively until we get what we want
-    await_csr(config, ord_new, domain).await
+    await_csr(config, ord_new, domain, status, order_attempts + 1).await
 }
 
 
@@ -262,7 +282,7 @@ async fn request_certificate(
 
     let ord_new = create_new_order(&account, domain, wildcard)
         .await
-        .map(|ord_new| await_csr(config, ord_new, domain))?
+        .map(|ord_new| await_csr(config, ord_new, domain, "", 1))?
         .await;
 
     // If the ownership of the domain(s) have already been
@@ -271,8 +291,9 @@ async fn request_certificate(
     let error_pause = sleep(Duration::from_millis(DEFAULT_ACME_INVALID_STATUS_PAUSE_MS));
     let ord_csr = match ord_new {
         Ok(order) => order,
-        Err(Error::ApiProblem(_api_problem)) => {
-            warn!("Invalid state from the ACME. Waiting 30s to retry (attempts: {attempts})");
+        Err(Error::ApiProblem(api_problem)) => {
+            let problem = api_problem.detail.unwrap_or_default();
+            warn!("Waiting 30s to retry (attempts: {attempts}). API problem: {problem:?}");
             error_pause.await;
             return request_certificate(config, domain, wildcard, attempts + 1).await;
         }

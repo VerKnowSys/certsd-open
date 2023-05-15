@@ -23,7 +23,7 @@ pub async fn delete_acme_dns_txt_entries(
             for entry in the_list {
                 match delete_txt_record(config, domain, &entry).await {
                     Ok(_) => info!("DNS TXT record destroyed"),
-                    Err(_) => error!("No DNS record to destroy"),
+                    Err(err) => error!("No DNS record to destroy. Error: {err:?}"),
                 }
             }
         }
