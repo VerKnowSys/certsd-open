@@ -11,13 +11,13 @@ pub const DEFAULT_MAX_NOTIFICATION_RETRIES: usize = 5;
 pub const DEFAULT_NOTIFICATION_RETRY_PAUSE_MS: u64 = 5000;
 
 /// ACME poll time when awaiting for the certificate
-pub const DEFAULT_ACME_POLL_PAUSE_MS: u64 = 5000;
+pub const DEFAULT_ACME_POLL_PAUSE_MS: u64 = 15000;
 
 /// Pause to await when ACME API responds with an "Invalid" state
 pub const DEFAULT_ACME_INVALID_STATUS_PAUSE_MS: u64 = 30000;
 
 /// ACME challenge validation pause
-pub const DEFAULT_ACME_CHALLENGE_VALIDATION_PAUSE_MS: u64 = 15000;
+pub const DEFAULT_ACME_CHALLENGE_VALIDATION_PAUSE_MS: u64 = 45000;
 
 /// Default Notification name:
 pub const DEFAULT_SLACK_NAME: &str = "CertsD";
