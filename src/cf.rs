@@ -45,7 +45,10 @@ pub async fn list_acme_txt_records(config: &Config, domain: &str) -> Result<Vec<
     )?;
     let list_dns_txt_records = ListDnsRecords {
         zone_identifier: &zone_id,
-        params: ListDnsRecordsParams::default(),
+        params: ListDnsRecordsParams {
+            per_page: Some(DEFAULT_MAX_ELEMENTS_PER_PAGE),
+            ..ListDnsRecordsParams::default()
+        },
     };
     let response = client.request_handle(&list_dns_txt_records).await?;
 
