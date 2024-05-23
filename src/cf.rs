@@ -60,6 +60,7 @@ pub async fn list_acme_txt_records(config: &Config, domain: &str) -> Result<Vec<
                     // …that contain "_acme-challenge", since we also use other TXT records for MX-stuff
                     if record.name.contains("_acme-challenge") && record.name.contains(domain)
                     {
+                        info!("Found previously defined DNS TXT record: {}", record.name);
                         Some(record.id.to_owned())
                     } else {
                         None
