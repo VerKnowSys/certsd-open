@@ -33,3 +33,6 @@ pub const DEFAULT_SLACK_FAILURE_COLOR: &str = "#ff1111";
 
 /// Default success notification color:
 pub const DEFAULT_SLACK_SUCCESS_COLOR: &str = "#00ff00";
+
+/// Default max elements for CF API DNS API calls
+pub const DEFAULT_MAX_ELEMENTS_PER_PAGE: u32 = 100_000;

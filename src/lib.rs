@@ -4,8 +4,6 @@ pub mod config;
 pub mod consts;
 pub mod notify;
 
-pub const DEFAULT_MAX_ELEMENTS_PER_PAGE: u32 = 100_000;
-
 use tracing_subscriber::{
     fmt::{
         format::{Compact, DefaultFields, Format},
