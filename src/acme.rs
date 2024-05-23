@@ -83,6 +83,16 @@ async fn await_csr(
                 }
                 ord_new.refresh().await?;
 
+                info!(
+                    "Waiting {}s",
+                    DEFAULT_ACME_CHALLENGE_VALIDATION_PAUSE_MS / 1000
+                );
+                tokio::time::sleep(Duration::from_millis(
+                    DEFAULT_ACME_CHALLENGE_VALIDATION_PAUSE_MS,
+                ))
+                .await;
+                ord_new.refresh().await?;
+
                 // The order at ACME will change status to either
                 // confirm ownership of the domain, or fail due to the
                 // not finding the proof. To see the change, we poll
@@ -97,7 +107,7 @@ async fn await_csr(
                         info!("Challenge validated.");
                     }
                     Err(e) => {
-                        debug!("Failed validation. Error {e:?}");
+                        error!("Failed validation. Error {e:?}");
                     }
                 }
                 ord_new.refresh().await?;
