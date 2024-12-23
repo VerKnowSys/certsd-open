@@ -91,8 +91,8 @@ impl Config {
     pub async fn contacts_of(&self, domain: &str) -> Vec<String> {
         self.accounts
             .iter()
+            .find(|&entry| entry.domain == domain)
             .cloned()
-            .find(|entry| entry.domain == domain)
             .map(|entry| entry.contacts)
             .unwrap_or_default()
     }
@@ -102,8 +102,8 @@ impl Config {
     pub async fn api_token_of(&self, domain: &str) -> String {
         self.accounts
             .iter()
+            .find(|&entry| entry.domain == domain)
             .cloned()
-            .find(|entry| entry.domain == domain)
             .map(|entry| entry.cloudflare_api_token)
             .unwrap_or_default()
     }
@@ -113,8 +113,8 @@ impl Config {
     pub async fn zone_id_of(&self, domain: &str) -> String {
         self.accounts
             .iter()
+            .find(|&entry| entry.domain == domain)
             .cloned()
-            .find(|entry| entry.domain == domain)
             .map(|entry| entry.cloudflare_zone_id)
             .unwrap_or_default()
     }
