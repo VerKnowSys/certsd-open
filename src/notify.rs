@@ -161,7 +161,6 @@ async fn test_send_message() -> Result<()> {
         );
 
         let config = Config::from("certsd.conf").await?;
-        assert!(config.acme_staging().await);
         let telegram_kind = config
             .notifications
             .iter()

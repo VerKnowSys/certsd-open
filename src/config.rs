@@ -63,17 +63,17 @@ impl Config {
 
 
     #[instrument]
-    pub async fn load() -> Result<Config, SpannedError> {
+    pub async fn load() -> Result<Config> {
         let config_file = Self::config_file().await;
         info!("Loading the configuration from: {config_file}");
-        from_str::<Config>(&read_to_string(config_file).await?)
+        Ok(from_str::<Config>(&read_to_string(config_file).await?)?)
     }
 
 
     #[instrument]
-    pub async fn from(config_file: &str) -> Result<Config, SpannedError> {
+    pub async fn from(config_file: &str) -> Result<Config> {
         info!("Loading the configuration from: {config_file}");
-        from_str::<Config>(&read_to_string(config_file).await?)
+        Ok(from_str::<Config>(&read_to_string(config_file).await?)?)
     }
 
 

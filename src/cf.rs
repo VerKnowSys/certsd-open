@@ -1,13 +1,15 @@
 use crate::*;
 
 use cloudflare::{
-    endpoints::dns::{
+    endpoints::dns::dns::{
         CreateDnsRecord, CreateDnsRecordParams, DeleteDnsRecord, DeleteDnsRecordResponse,
         DnsContent, DnsRecord, ListDnsRecords, ListDnsRecordsParams,
     },
     framework::{
-        Environment, HttpApiClientConfig, async_api::Client, auth::Credentials,
+        auth::Credentials,
+        client::{async_api::Client, ClientConfig},
         response::ApiSuccess,
+        Environment,
     },
 };
 
@@ -40,7 +42,7 @@ pub async fn list_acme_txt_records(config: &Config, domain: &str) -> Result<Vec<
         Credentials::UserAuthToken {
             token: config.api_token_of(domain).await,
         },
-        HttpApiClientConfig::default(),
+        ClientConfig::default(),
         Environment::Production,
     )?;
     let list_dns_txt_records = ListDnsRecords {
@@ -50,7 +52,7 @@ pub async fn list_acme_txt_records(config: &Config, domain: &str) -> Result<Vec<
             ..ListDnsRecordsParams::default()
         },
     };
-    let response = client.request_handle(&list_dns_txt_records).await?;
+    let response = client.request(&list_dns_txt_records).await?;
 
     let txt_record_ids = response
         .result
@@ -92,7 +94,7 @@ pub async fn delete_txt_record(
         Credentials::UserAuthToken {
             token: config.api_token_of(domain).await,
         },
-        HttpApiClientConfig::default(),
+        ClientConfig::default(),
         Environment::Production,
     )?;
     let delete_dns_record = DeleteDnsRecord {
@@ -100,7 +102,7 @@ pub async fn delete_txt_record(
         identifier: id,
     };
     client
-        .request_handle(&delete_dns_record)
+        .request(&delete_dns_record)
         .await
         .map_err(|e| e.into())
 }
@@ -117,7 +119,7 @@ pub async fn create_txt_record(
         Credentials::UserAuthToken {
             token: config.api_token_of(domain).await,
         },
-        HttpApiClientConfig::default(),
+        ClientConfig::default(),
         Environment::Production,
     )?;
     let create_dns_txt_record = CreateDnsRecord {
@@ -134,7 +136,7 @@ pub async fn create_txt_record(
     };
 
     client
-        .request_handle(&create_dns_txt_record)
+        .request(&create_dns_txt_record)
         .await
         .map_err(|e| e.into())
 }
