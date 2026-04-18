@@ -22,7 +22,6 @@ pub enum NotifyWith {
 
 
 impl NotifyWith {
-
     #[instrument(skip(self))]
     pub async fn notify(&self, message: &str) -> Result<()> {
         match self {
@@ -30,21 +29,16 @@ impl NotifyWith {
                 webhook,
             } => {
                 info!("Slack notification configured");
-                notify_success_slack(&webhook.to_owned(), message)
-                    .await
+                notify_success_slack(&webhook.to_owned(), message).await
             }
             NotifyWith::Telegram {
                 chat_id,
                 token,
             } => {
                 info!("Telegram notification configured");
-                notify_success_telegram(
-                    chat_id,
-                    token,
-                    message,
-                )
-                .await
-                .map_err(Into::into)
+                notify_success_telegram(chat_id, token, message)
+                    .await
+                    .map_err(Into::into)
             }
             NotifyWith::None => {
                 info!("No notification configured");
@@ -59,38 +53,32 @@ impl NotifyWith {
 #[instrument(skip(webhook))]
 pub async fn notify_success_slack(webhook: &str, message: &str) -> Result<()> {
     let success_emoji = String::from(DEFAULT_SLACK_SUCCESS_ICON);
-    notify_slack(webhook, message, &success_emoji, false)
-        .await
+    notify_slack(webhook, message, &success_emoji, false).await
 }
 
 
 /// Sends success notification to Telegram
 #[instrument(skip(token))]
-pub async fn notify_success_telegram(
-    chat_id: &str,
-    token: &str,
-    message: &str,
-) -> Result<()> {
+pub async fn notify_success_telegram(chat_id: &str, token: &str, message: &str) -> Result<()> {
     let success_emoji = String::from(DEFAULT_SLACK_SUCCESS_ICON);
-    notify_telegram(chat_id, token, message, &success_emoji, false)
-        .await
+    notify_telegram(chat_id, token, message, &success_emoji, false).await
 }
 
 
 /// Send notification to Slack with retry on failure
 #[instrument(skip(config, domain, wildcard))]
-pub async fn notify_success(
-    config: &Config,
-    domain: &str,
-    wildcard: bool,
-) -> Result<()> {
+pub async fn notify_success(config: &Config, domain: &str, wildcard: bool) -> Result<()> {
     let message = if wildcard {
         format!("Certificate renewal succeeded for the domain: *.{domain}.")
     } else {
         format!("Certificate renewal succeeded for the domain: {domain}.")
     };
     for notification_type in config.notifications.iter() {
-        notification_type.notify(&message).await.map_err(|e| error!("{e}")).unwrap_or_default();
+        notification_type
+            .notify(&message)
+            .await
+            .map_err(|e| error!("{e}"))
+            .unwrap_or_default();
     }
     Ok(())
 }
@@ -113,15 +101,20 @@ pub async fn notify_telegram(
         return Ok(());
     }
     let api = match BotApi::new(String::from(token), None).await {
-        Ok(api) => {
-            api
-        },
-        Err(err) => return Err(anyhow!("Telegram BotApi failed: {err:?}"))
+        Ok(api) => api,
+        Err(err) => return Err(anyhow!("Telegram BotApi failed: {err:?}")),
     };
-    let message = SendMessage::new(ChatId::StringType(String::from(chat_id)), String::from(message));
+    let message = SendMessage::new(
+        ChatId::StringType(String::from(chat_id)),
+        String::from(message),
+    );
     match api.send_message(message).await {
         Ok(_sent) => Ok(()),
-        Err(err) => Err(anyhow!("Telegram BotApi couldn't connect to chat: {chat_id}. Error: {err:?}"))
+        Err(err) => {
+            Err(anyhow!(
+                "Telegram BotApi couldn't connect to chat: {chat_id}. Error: {err:?}"
+            ))
+        }
     }
 }
 
@@ -158,35 +151,32 @@ async fn notify_slack(webhook: &str, message: &str, icon: &str, fail: bool) -> R
 
 #[tokio::test]
 async fn test_send_message() -> Result<()> {
-
     use super::*;
     use std::path::Path;
 
     if Path::new("certsd.conf").exists() {
         initialize_logger();
-        info!("Starting new message test for Telegram since certsd.conf is present in the CWD");
+        info!(
+            "Starting new message test for Telegram since certsd.conf is present in the CWD"
+        );
 
         let config = Config::from("certsd.conf").await?;
         assert!(config.acme_staging().await);
-        let telegram_kind = config.notifications.iter().find(|elem| {
-            matches!(elem, NotifyWith::Telegram {
-                    ..
-                })
-        });
+        let telegram_kind = config
+            .notifications
+            .iter()
+            .find(|elem| matches!(elem, NotifyWith::Telegram { .. }));
         if let Some(telegram) = telegram_kind {
             let NotifyWith::Telegram {
                 chat_id,
                 token,
-            } = telegram else { todo!() };
-            notify_telegram(
-                chat_id,
-                token,
-                "Testing message",
-                "icon",
-                false,
-            )
-            .await
-            .unwrap();
+            } = telegram
+            else {
+                todo!()
+            };
+            notify_telegram(chat_id, token, "Testing message", "icon", false)
+                .await
+                .unwrap();
         }
     }
     Ok(())

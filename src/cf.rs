@@ -6,8 +6,8 @@ use cloudflare::{
         DnsContent, DnsRecord, ListDnsRecords, ListDnsRecordsParams,
     },
     framework::{
-        async_api::Client, auth::Credentials, response::ApiSuccess, Environment,
-        HttpApiClientConfig,
+        Environment, HttpApiClientConfig, async_api::Client, auth::Credentials,
+        response::ApiSuccess,
     },
 };
 

@@ -5,19 +5,20 @@ pub mod consts;
 pub mod notify;
 
 use tracing_subscriber::{
+    EnvFilter, Registry,
     fmt::{
+        Layer,
         format::{Compact, DefaultFields, Format},
-        Layer, *,
+        *,
     },
     layer::Layered,
     reload::*,
-    EnvFilter, Registry,
 };
 
 pub use crate::{acme::*, cf::*, config::*, consts::*, notify::*};
-pub use anyhow::anyhow;
 pub use anyhow::Result;
-pub use tracing::{debug, error, event, info, instrument, span, trace, warn, Level};
+pub use anyhow::anyhow;
+pub use tracing::{Level, debug, error, event, info, instrument, span, trace, warn};
 
 
 type TracingEnvFilterHandle =
