@@ -36,9 +36,7 @@ impl NotifyWith {
                 token,
             } => {
                 info!("Telegram notification configured");
-                notify_success_telegram(chat_id, token, message)
-                    .await
-                    .map_err(Into::into)
+                notify_success_telegram(chat_id, token, message).await
             }
             NotifyWith::None => {
                 info!("No notification configured");

@@ -72,13 +72,28 @@ async fn await_csr(
         match auth.dns_challenge().await {
             Some(challenge) => {
                 debug!("Deleting any previous DNS entries for domain: {domain}");
-                delete_acme_dns_txt_entries(config, domain).await?;
+                match delete_acme_dns_txt_entries(config, domain).await {
+                    Ok(_) => info!("DNS TXT record destroyed for domain: {domain}"),
+                    Err(err) => {
+                        let error_msg =
+                            &format!("Failed to destroy DNS TXT record. Error: {err:?}");
+                        error!(error_msg);
+                        notify_failure(config, domain, error_msg)
+                            .await
+                            .unwrap_or_default();
+                    }
+                }
 
                 let proof_code = challenge.dns_proof().await?;
                 match create_txt_record(config, domain, &proof_code).await {
-                    Ok(_) => info!("DNS TXT record created"),
+                    Ok(_) => info!("DNS TXT record created for domain: {domain}"),
                     Err(err) => {
-                        error!("Failed to create DNS TXT record. Error: {err:?}");
+                        let error_msg =
+                            &format!("Failed to create DNS TXT record. Error: {err:?}");
+                        error!(error_msg);
+                        notify_failure(config, domain, error_msg)
+                            .await
+                            .unwrap_or_default();
                     }
                 }
                 ord_new.refresh().await?;
@@ -113,7 +128,17 @@ async fn await_csr(
                 ord_new.refresh().await?;
 
                 // delete the DNS TXT _acme entries
-                delete_acme_dns_txt_entries(config, domain).await?;
+                match delete_acme_dns_txt_entries(config, domain).await {
+                    Ok(_) => info!("DNS TXT record destroyed for domain: {domain}"),
+                    Err(err) => {
+                        let error_msg =
+                            &format!("Failed to destroy DNS TXT record. Error: {err:?}");
+                        error!(error_msg);
+                        notify_failure(config, domain, error_msg)
+                            .await
+                            .unwrap_or_default();
+                    }
+                }
             }
             None => {
                 error!("Challenge is None!")

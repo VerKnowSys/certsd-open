@@ -6,10 +6,10 @@ use cloudflare::{
         DnsContent, DnsRecord, ListDnsRecords, ListDnsRecordsParams,
     },
     framework::{
-        auth::Credentials,
-        client::{async_api::Client, ClientConfig},
-        response::ApiSuccess,
         Environment,
+        auth::Credentials,
+        client::{ClientConfig, async_api::Client},
+        response::ApiSuccess,
     },
 };
 
@@ -18,15 +18,12 @@ use cloudflare::{
 pub async fn delete_acme_dns_txt_entries(
     config: &Config,
     domain: &str,
-) -> Result<(), hyperacme::Error> {
+) -> Result<(), anyhow::Error> {
     let dns_response = list_acme_txt_records(config, domain).await;
     match dns_response {
         Ok(the_list) => {
             for entry in the_list {
-                match delete_txt_record(config, domain, &entry).await {
-                    Ok(_) => info!("DNS TXT record destroyed"),
-                    Err(err) => error!("No DNS record to destroy. Error: {err:?}"),
-                }
+                delete_txt_record(config, domain, &entry).await?;
             }
         }
         Err(e) => error!("Err: {e}"),
