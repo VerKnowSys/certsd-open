@@ -65,7 +65,7 @@ pub async fn notify_success_telegram(chat_id: &str, token: &str, message: &str) 
 }
 
 
-/// Send notification to Slack with retry on failure
+/// Send success notification to Slack/ Telegram
 #[instrument(skip(config, domain, wildcard))]
 pub async fn notify_success(config: &Config, domain: &str, wildcard: bool) -> Result<()> {
     let message = if wildcard {
@@ -76,6 +76,22 @@ pub async fn notify_success(config: &Config, domain: &str, wildcard: bool) -> Re
     for notification_type in config.notifications.iter() {
         notification_type
             .notify(&message)
+            .await
+            .map_err(|e| error!("{e}"))
+            .unwrap_or_default();
+    }
+    Ok(())
+}
+
+
+/// Send failure notification to Slack/ Telegram
+#[instrument(skip(config, domain))]
+pub async fn notify_failure(config: &Config, domain: &str, error_msg: &str) -> Result<()> {
+    for notification_type in config.notifications.iter() {
+        notification_type
+            .notify(&format!(
+                "Failure processing action for domain: {domain}: {error_msg}"
+            ))
             .await
             .map_err(|e| error!("{e}"))
             .unwrap_or_default();
